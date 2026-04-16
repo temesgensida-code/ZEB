@@ -6,6 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+import requests
 import tldextract
 import whois
 from rest_framework import status
@@ -57,6 +58,7 @@ CHAR_SUBSTITUTIONS = str.maketrans(
 )
 
 NEW_DOMAIN_DAYS_THRESHOLD = 180
+REDIRECT_COUNT_THRESHOLD = 5
 
 
 def levenshtein_distance(a: str, b: str) -> int:
@@ -77,6 +79,27 @@ def levenshtein_distance(a: str, b: str) -> int:
 			current.append(min(insertion, deletion, replacement))
 		previous = current
 	return previous[-1]
+
+
+def detect_typosquatting_brand(domain: str) -> str | None:
+	if not domain:
+		return None
+
+	translated = domain.translate(CHAR_SUBSTITUTIONS)
+	for brand in BRAND_KEYWORDS:
+		close_distance = levenshtein_distance(domain, brand)
+		translated_distance = levenshtein_distance(translated, brand)
+		if (
+			domain != brand
+			and (
+				translated == brand
+				or close_distance == 1
+				or translated_distance <= 1
+			)
+		):
+			return brand
+
+	return None
 
 
 class UrlSafetyCheckView(APIView):
@@ -193,6 +216,123 @@ class UrlSafetyCheckView(APIView):
 			'createdDate': created.isoformat(),
 		}
 
+	def analyze_redirect_chain(self, target_url: str, original_domain: str, findings: list) -> dict:
+		try:
+			response = requests.get(
+				target_url,
+				allow_redirects=True,
+				timeout=10,
+				headers={'User-Agent': 'zeb-url-checker/1.0'},
+			)
+		except requests.TooManyRedirects:
+			findings.append(
+				{
+					'type': 'TOO_MANY_REDIRECTS',
+					'flagged': True,
+					'explanation': (
+						'The URL triggered too many redirects. Excessive redirect loops can '
+						'obfuscate the final destination and are a common phishing red flag.'
+					),
+				}
+			)
+			return {
+				'available': True,
+				'redirectCount': None,
+				'tooManyRedirects': True,
+				'finalUrl': None,
+				'suspiciousRedirectHops': [],
+			}
+		except requests.RequestException:
+			findings.append(
+				{
+					'type': 'REDIRECT_CHECK_UNAVAILABLE',
+					'flagged': False,
+					'explanation': (
+						'Redirect chain could not be verified due to a network or connection issue.'
+					),
+				}
+			)
+			return {
+				'available': False,
+				'redirectCount': None,
+				'tooManyRedirects': None,
+				'finalUrl': None,
+				'suspiciousRedirectHops': [],
+			}
+
+		history_urls = [item.url for item in response.history]
+		chain_urls = history_urls + [response.url]
+		redirect_count = len(response.history)
+		too_many_redirects = redirect_count > REDIRECT_COUNT_THRESHOLD
+
+		if too_many_redirects:
+			findings.append(
+				{
+					'type': 'TOO_MANY_REDIRECTS',
+					'flagged': True,
+					'explanation': (
+						f'The URL performed {redirect_count} redirects. Long redirect chains '
+						'can hide the real destination and increase phishing risk.'
+					),
+				}
+			)
+
+		suspicious_hops = []
+		for hop_url in chain_urls[1:]:
+			hostname = (urlparse(hop_url).hostname or '').lower()
+			if not hostname:
+				continue
+
+			extracted = tldextract.extract(hostname)
+			hop_registered_domain = extracted.registered_domain.lower()
+			hop_tld = extracted.suffix.lower()
+
+			reasons = []
+			if self.is_ip_host(hostname) or self.is_ip_like_host(hostname):
+				reasons.append('redirects to an IP-based host')
+
+			if hop_tld and hop_tld.split('.')[-1] in SUSPICIOUS_TLDS:
+				reasons.append(f"uses suspicious TLD '.{hop_tld.split('.')[-1]}'")
+
+			typosquatting_brand = detect_typosquatting_brand(extracted.domain.lower())
+			if typosquatting_brand:
+				reasons.append(f"resembles typo of brand '{typosquatting_brand}'")
+
+			if original_domain and hop_registered_domain and hop_registered_domain != original_domain:
+				reasons.append(
+					f"changes destination domain from '{original_domain}' to '{hop_registered_domain}'"
+				)
+
+			if reasons:
+				suspicious_hops.append(
+					{
+						'url': hop_url,
+						'hostname': hostname,
+						'reasons': reasons,
+					}
+				)
+
+		if suspicious_hops:
+			hop_hosts = ', '.join(item['hostname'] for item in suspicious_hops[:3])
+			findings.append(
+				{
+					'type': 'SUSPICIOUS_REDIRECT_CHAIN',
+					'flagged': True,
+					'explanation': (
+						f'Redirect chain includes suspicious intermediate domains ({hop_hosts}). '
+						'Redirecting through unrelated or suspicious domains is a phishing red flag.'
+					),
+				}
+			)
+
+		return {
+			'available': True,
+			'redirectCount': redirect_count,
+			'tooManyRedirects': too_many_redirects,
+			'finalUrl': response.url,
+			'suspiciousRedirectHops': suspicious_hops,
+		}
+
 	def analyze_url_structure(self, target_url: str) -> dict:
 		parsed = urlparse(target_url)
 		hostname = (parsed.hostname or '').lower()
@@ -209,22 +349,7 @@ class UrlSafetyCheckView(APIView):
 		has_ip_host = (self.is_ip_host(hostname) or self.is_ip_like_host(hostname)) if hostname else False
 		is_suspicious_tld = tld.split('.')[-1] in SUSPICIOUS_TLDS if tld else False
 
-		translated = registered_domain.translate(CHAR_SUBSTITUTIONS)
-		typosquatting_match = None
-
-		for brand in BRAND_KEYWORDS:
-			close_distance = levenshtein_distance(registered_domain, brand)
-			translated_distance = levenshtein_distance(translated, brand)
-
-			if (
-				registered_domain == brand
-				or translated == brand
-				or close_distance == 1
-				or translated_distance <= 1
-			):
-				if registered_domain != brand:
-					typosquatting_match = brand
-					break
+		typosquatting_match = detect_typosquatting_brand(registered_domain)
 
 		has_typosquatting_signal = typosquatting_match is not None
 
@@ -267,6 +392,7 @@ class UrlSafetyCheckView(APIView):
 			)
 
 		domain_age = self.analyze_domain_age(registered_domain_full, findings)
+		redirect_analysis = self.analyze_redirect_chain(target_url, registered_domain_full, findings)
 
 		if not findings:
 			findings.append(
@@ -285,11 +411,16 @@ class UrlSafetyCheckView(APIView):
 			'hasSuspiciousTld': is_suspicious_tld,
 			'hasTyposquattingSignal': has_typosquatting_signal,
 			'hasNewDomainRisk': bool(domain_age['isNewDomain']),
+			'hasRedirectRisk': bool(
+				redirect_analysis['tooManyRedirects']
+				or len(redirect_analysis['suspiciousRedirectHops']) > 0
+			),
 			'hostname': hostname,
 			'tld': tld,
 			'registeredDomain': registered_domain,
 			'registeredDomainFull': registered_domain_full,
 			'domainAge': domain_age,
+			'redirectAnalysis': redirect_analysis,
 			'findings': findings,
 		}
 
