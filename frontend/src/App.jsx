@@ -3,6 +3,7 @@ import './App.css'
 import { IoInformationCircleOutline } from "react-icons/io5";
 
 function App() {
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
@@ -22,7 +23,8 @@ function App() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/check-url/', {
+      const endpoint = `${apiBaseUrl}/api/check-url/`
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

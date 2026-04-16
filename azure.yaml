@@ -1,0 +1,11 @@
+name: zeb
+services:
+  api:
+    project: ./backend
+    language: py
+    host: appservice
+  web:
+    project: ./frontend
+    language: js
+    host: staticwebapp
+    dist: dist
