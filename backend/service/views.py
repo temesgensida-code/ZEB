@@ -1,13 +1,78 @@
 import json
 import os
+from ipaddress import ip_address
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+import tldextract
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+SUSPICIOUS_TLDS = {
+	'xyz',
+	'tk',
+	'tu',
+	'top',
+	'gq',
+	'ml',
+	'cf',
+	'ga',
+	'click',
+	'buzz',
+	'work',
+	'zip',
+	'mov',
+}
+
+BRAND_KEYWORDS = {
+	'facebook',
+	'google',
+	'microsoft',
+	'apple',
+	'amazon',
+	'instagram',
+	'netflix',
+	'paypal',
+	'whatsapp',
+	'telegram',
+	'bankofamerica',
+}
+
+CHAR_SUBSTITUTIONS = str.maketrans(
+	{
+		'0': 'o',
+		'1': 'l',
+		'3': 'e',
+		'4': 'a',
+		'5': 's',
+		'7': 't',
+		'8': 'b',
+	}
+)
+
+
+def levenshtein_distance(a: str, b: str) -> int:
+	if a == b:
+		return 0
+	if not a:
+		return len(b)
+	if not b:
+		return len(a)
+
+	previous = list(range(len(b) + 1))
+	for i, char_a in enumerate(a, start=1):
+		current = [i]
+		for j, char_b in enumerate(b, start=1):
+			insertion = current[j - 1] + 1
+			deletion = previous[j] + 1
+			replacement = previous[j - 1] + (char_a != char_b)
+			current.append(min(insertion, deletion, replacement))
+		previous = current
+	return previous[-1]
 
 
 class UrlSafetyCheckView(APIView):
@@ -20,6 +85,119 @@ class UrlSafetyCheckView(APIView):
 		if value and '://' not in value:
 			value = f'https://{value}'
 		return value
+
+	@staticmethod
+	def is_ip_host(hostname: str) -> bool:
+		try:
+			ip_address(hostname)
+			return True
+		except ValueError:
+			return False
+
+	@staticmethod
+	def is_ip_like_host(hostname: str) -> bool:
+		if not hostname:
+			return False
+		if ':' in hostname:
+			return all(part == '' or all(c in '0123456789abcdefABCDEF' for c in part) for part in hostname.split(':'))
+
+		labels = hostname.split('.')
+		if len(labels) < 2:
+			return False
+		return all(label.isdigit() for label in labels if label)
+
+	def analyze_url_structure(self, target_url: str) -> dict:
+		parsed = urlparse(target_url)
+		hostname = (parsed.hostname or '').lower()
+
+		tld = ''
+		registered_domain = ''
+		if hostname:
+			extracted = tldextract.extract(hostname)
+			tld = extracted.suffix.lower()
+			registered_domain = extracted.domain.lower()
+
+		has_ip_host = (self.is_ip_host(hostname) or self.is_ip_like_host(hostname)) if hostname else False
+		is_suspicious_tld = tld.split('.')[-1] in SUSPICIOUS_TLDS if tld else False
+
+		translated = registered_domain.translate(CHAR_SUBSTITUTIONS)
+		typosquatting_match = None
+
+		for brand in BRAND_KEYWORDS:
+			close_distance = levenshtein_distance(registered_domain, brand)
+			translated_distance = levenshtein_distance(translated, brand)
+
+			if (
+				registered_domain == brand
+				or translated == brand
+				or close_distance == 1
+				or translated_distance <= 1
+			):
+				if registered_domain != brand:
+					typosquatting_match = brand
+					break
+
+		has_typosquatting_signal = typosquatting_match is not None
+
+		findings = []
+		if has_ip_host:
+			findings.append(
+				{
+					'type': 'IP_BASED_URL',
+					'flagged': True,
+					'explanation': (
+						'The URL uses an IP address instead of a readable domain name. '
+						'Attackers often do this to hide identity and quickly rotate hosts.'
+					),
+				}
+			)
+
+		if is_suspicious_tld:
+			findings.append(
+				{
+					'type': 'SUSPICIOUS_TLD',
+					'flagged': True,
+					'explanation': (
+						f"The top-level domain '.{tld.split('.')[-1]}' is frequently abused "
+						'in phishing and scam campaigns due to low registration friction.'
+					),
+				}
+			)
+
+		if has_typosquatting_signal:
+			findings.append(
+				{
+					'type': 'TYPOSQUATTING_SIGNAL',
+					'flagged': True,
+					'explanation': (
+						f"The domain looks like a typo variant of '{typosquatting_match}' "
+						'for example letter substitution like faceb00k, '
+						'which is a common credential-harvesting trick.'
+					),
+				}
+			)
+
+		if not findings:
+			findings.append(
+				{
+					'type': 'NO_STRONG_STRUCTURE_SIGNALS',
+					'flagged': False,
+					'explanation': (
+						'No strong URL structure red flags were detected, '
+						'but this still does not prove the destination is safe.'
+					),
+				}
+			)
+
+		return {
+			'isIpBased': has_ip_host,
+			'hasSuspiciousTld': is_suspicious_tld,
+			'hasTyposquattingSignal': has_typosquatting_signal,
+			'hostname': hostname,
+			'tld': tld,
+			'registeredDomain': registered_domain,
+			'findings': findings,
+		}
 
 	def post(self, request):
 		raw_url = request.data.get('url', '')
@@ -93,6 +271,8 @@ class UrlSafetyCheckView(APIView):
 			for match in matches
 		]
 
+		structure_analysis = self.analyze_url_structure(target_url)
+
 		unsafe = len(threats) > 0
 		verdict = 'UNSAFE' if unsafe else 'UNSURE'
 
@@ -110,6 +290,7 @@ class UrlSafetyCheckView(APIView):
 					)
 				),
 				'threats': threats,
+				'structureAnalysis': structure_analysis,
 			},
 			status=status.HTTP_200_OK,
 		)

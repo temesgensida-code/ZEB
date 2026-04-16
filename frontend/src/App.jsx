@@ -84,6 +84,30 @@ function App() {
                 ))}
               </ul>
             )}
+
+            {result.structureAnalysis && (
+              <div className="analysis-block">
+                <h2>URL Structure Analysis</h2>
+                <p>
+                  <strong>Host:</strong> {result.structureAnalysis.hostname || 'N/A'}
+                </p>
+                <p>
+                  <strong>Registered Domain:</strong>{' '}
+                  {result.structureAnalysis.registeredDomain || 'N/A'}
+                </p>
+                <p>
+                  <strong>TLD:</strong> {result.structureAnalysis.tld || 'N/A'}
+                </p>
+                <ul>
+                  {result.structureAnalysis.findings?.map((finding, index) => (
+                    <li key={`${finding.type}-${index}`}>
+                      <strong>{finding.flagged ? 'Suspicious:' : 'Note:'}</strong>{' '}
+                      {finding.explanation}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </section>

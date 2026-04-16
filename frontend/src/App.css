@@ -84,3 +84,18 @@ h1 {
   margin: 10px 0 0;
   padding-left: 20px;
 }
+
+.analysis-block {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.analysis-block h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+
+.analysis-block p {
+  margin: 4px 0;
+}
