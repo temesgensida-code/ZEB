@@ -1,11 +1,13 @@
 import json
 import os
+from datetime import date, datetime
 from ipaddress import ip_address
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 import tldextract
+import whois
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -53,6 +55,8 @@ CHAR_SUBSTITUTIONS = str.maketrans(
 		'8': 'b',
 	}
 )
+
+NEW_DOMAIN_DAYS_THRESHOLD = 180
 
 
 def levenshtein_distance(a: str, b: str) -> int:
@@ -106,16 +110,101 @@ class UrlSafetyCheckView(APIView):
 			return False
 		return all(label.isdigit() for label in labels if label)
 
+	@staticmethod
+	def parse_creation_date(value):
+		if isinstance(value, datetime):
+			return value.date()
+		if isinstance(value, date):
+			return value
+		if isinstance(value, list):
+			candidates = [UrlSafetyCheckView.parse_creation_date(item) for item in value]
+			candidates = [item for item in candidates if item is not None]
+			return min(candidates) if candidates else None
+		return None
+
+	def analyze_domain_age(self, query_domain: str, findings: list) -> dict:
+		if not query_domain:
+			return {
+				'available': False,
+				'isNewDomain': None,
+				'domainAgeDays': None,
+				'createdDate': None,
+			}
+
+		try:
+			whois_result = whois.whois(query_domain)
+		except Exception:
+			findings.append(
+				{
+					'type': 'DOMAIN_AGE_UNAVAILABLE',
+					'flagged': False,
+					'explanation': (
+						'WHOIS data could not be retrieved for this domain, '
+						'so domain age could not be verified.'
+					),
+				}
+			)
+			return {
+				'available': False,
+				'isNewDomain': None,
+				'domainAgeDays': None,
+				'createdDate': None,
+			}
+
+		created = self.parse_creation_date(getattr(whois_result, 'creation_date', None))
+		if not created:
+			findings.append(
+				{
+					'type': 'DOMAIN_AGE_UNAVAILABLE',
+					'flagged': False,
+					'explanation': (
+						'WHOIS did not return a reliable creation date, '
+						'so domain age could not be verified.'
+					),
+				}
+			)
+			return {
+				'available': False,
+				'isNewDomain': None,
+				'domainAgeDays': None,
+				'createdDate': None,
+			}
+
+		age_days = max((date.today() - created).days, 0)
+		is_new_domain = age_days < NEW_DOMAIN_DAYS_THRESHOLD
+
+		if is_new_domain:
+			findings.append(
+				{
+					'type': 'NEW_DOMAIN_RISK',
+					'flagged': True,
+					'explanation': (
+						f'This domain appears to be about {age_days} days old. '
+						'New domains are higher risk because attackers often use recently '
+						'registered domains for short-lived phishing campaigns.'
+					),
+				}
+			)
+
+		return {
+			'available': True,
+			'isNewDomain': is_new_domain,
+			'domainAgeDays': age_days,
+			'createdDate': created.isoformat(),
+		}
+
 	def analyze_url_structure(self, target_url: str) -> dict:
 		parsed = urlparse(target_url)
 		hostname = (parsed.hostname or '').lower()
 
 		tld = ''
 		registered_domain = ''
+		registered_domain_full = ''
 		if hostname:
 			extracted = tldextract.extract(hostname)
 			tld = extracted.suffix.lower()
 			registered_domain = extracted.domain.lower()
+			registered_domain_full = extracted.registered_domain.lower()
 
 		has_ip_host = (self.is_ip_host(hostname) or self.is_ip_like_host(hostname)) if hostname else False
 		is_suspicious_tld = tld.split('.')[-1] in SUSPICIOUS_TLDS if tld else False
@@ -177,6 +266,8 @@ class UrlSafetyCheckView(APIView):
 				}
 			)
 
+		domain_age = self.analyze_domain_age(registered_domain_full, findings)
+
 		if not findings:
 			findings.append(
 				{
@@ -193,9 +284,12 @@ class UrlSafetyCheckView(APIView):
 			'isIpBased': has_ip_host,
 			'hasSuspiciousTld': is_suspicious_tld,
 			'hasTyposquattingSignal': has_typosquatting_signal,
+			'hasNewDomainRisk': bool(domain_age['isNewDomain']),
 			'hostname': hostname,
 			'tld': tld,
 			'registeredDomain': registered_domain,
+			'registeredDomainFull': registered_domain_full,
+			'domainAge': domain_age,
 			'findings': findings,
 		}
 

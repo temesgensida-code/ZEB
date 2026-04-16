@@ -46,7 +46,8 @@ function App() {
   return (
     <main className="page">
       <section className="card">
-        <h1>URL Safety Checker</h1>
+        <h1>ZEB</h1>
+        <h3>URL Safety Checker</h3>
         <p className="subtitle">
           Enter a URL and the backend will check it via Google Safe Browsing.
         </p>
@@ -96,7 +97,25 @@ function App() {
                   {result.structureAnalysis.registeredDomain || 'N/A'}
                 </p>
                 <p>
+                  <strong>Domain (Full):</strong>{' '}
+                  {result.structureAnalysis.registeredDomainFull || 'N/A'}
+                </p>
+                <p>
                   <strong>TLD:</strong> {result.structureAnalysis.tld || 'N/A'}
+                </p>
+                <p>
+                  <strong>Domain Age:</strong>{' '}
+                  {result.structureAnalysis.domainAge?.available
+                    ? `${result.structureAnalysis.domainAge.domainAgeDays} days`
+                    : 'Unavailable'}
+                </p>
+                <p>
+                  <strong>New Domain Risk:</strong>{' '}
+                  {result.structureAnalysis.domainAge?.isNewDomain
+                    ? 'Yes (higher risk)'
+                    : result.structureAnalysis.domainAge?.isNewDomain === false
+                      ? 'No'
+                      : 'Unknown'}
                 </p>
                 <ul>
                   {result.structureAnalysis.findings?.map((finding, index) => (
