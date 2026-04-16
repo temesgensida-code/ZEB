@@ -7,6 +7,7 @@
 }
 
 .card {
+  position: relative;
   width: min(640px, 100%);
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid #d7dae0;
@@ -24,6 +25,55 @@ h1 {
   margin-top: 10px;
   margin-bottom: 22px;
   color: #41516f;
+}
+
+.info-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-grid;
+  place-items: center;
+  align-items: center;
+  border: 1px solid #c0c6d4;
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-bottom: 0;
+  background: #f7fafc;
+  color: #293241;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.info-toggle:hover {
+  background: #eef3f8;
+}
+
+.info-panel {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+.info-panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.info-panel ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.assurance-note {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #7a2e0e;
 }
 
 .checker-form {
