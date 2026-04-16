@@ -1,0 +1,86 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  width: min(640px, 100%);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d7dae0;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(27, 40, 63, 0.12);
+  padding: 28px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.subtitle {
+  margin-top: 10px;
+  margin-bottom: 22px;
+  color: #41516f;
+}
+
+.checker-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.checker-form input {
+  flex: 1 1 350px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #c0c6d4;
+  font-size: 1rem;
+}
+
+.checker-form button {
+  border: none;
+  border-radius: 8px;
+  padding: 12px 18px;
+  background: #0f62fe;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.checker-form button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.message.error {
+  margin-top: 16px;
+  color: #c81e1e;
+}
+
+.result {
+  margin-top: 18px;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: left;
+}
+
+.result.unsure {
+  background: #fff8e1;
+  border: 1px solid #f2cf72;
+  color: #704b00;
+}
+
+.result.unsafe {
+  background: #fdeceb;
+  border: 1px solid #f0a6a2;
+  color: #7f1d1d;
+}
+
+.result ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
