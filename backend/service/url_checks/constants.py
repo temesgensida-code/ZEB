@@ -56,11 +56,11 @@ SANDBOX_KEYWORDS = [
 ]
 
 SUSPICIOUS_SCRIPT_PATTERNS = [
-    r'eval\\s*\\(',
-    r'atob\\s*\\(',
-    r'document\\.write\\s*\\(',
-    r'fromcharcode\\s*\\(',
-    r'unescape\\s*\\(',
-    r'settimeout\\s*\\(\\s*["\']',
-    r'setinterval\\s*\\(\\s*["\']',
+    r'eval\s*\(',
+    r'atob\s*\(',
+    r'document\.write\s*\(',
+    r'fromcharcode\s*\(',
+    r'unescape\s*\(',
+    r'settimeout\s*\(\s*["\']',
+    r'setinterval\s*\(\s*["\']',
 ]

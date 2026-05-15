@@ -53,7 +53,7 @@ function App() {
         <h1>ZEB</h1>
         <h3>URL Safety Checker</h3>
         <p className="subtitle">
-          Enter a URL and the backend will check it via Google Safe Browsing.
+          Enter a URL and the backend will check it via Google Safe Browsing and Custom safty checking mechanism.
         </p>
 
         <button
