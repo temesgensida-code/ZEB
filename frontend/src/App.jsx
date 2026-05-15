@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import { IoInformationCircleOutline } from "react-icons/io5";
 
@@ -9,11 +9,36 @@ function App() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [showInfo, setShowInfo] = useState(false)
+  const [currentStage, setCurrentStage] = useState('')
+  const [sessionId, setSessionId] = useState(null)
+  const [progressInterval, setProgressInterval] = useState(null)
+
+  // Poll for progress updates
+  useEffect(() => {
+    if (!sessionId || !loading) return
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/check-progress/?sessionId=${sessionId}`)
+        const data = await response.json()
+        if (data.currentStage) {
+          setCurrentStage(data.currentStage)
+        }
+      } catch (err) {
+        console.error('Error fetching progress:', err)
+      }
+    }, 300) // Poll every 300ms for smooth updates
+
+    setProgressInterval(interval)
+    return () => clearInterval(interval)
+  }, [sessionId, loading, apiBaseUrl])
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
     setResult(null)
+    setCurrentStage('')
+    setSessionId(null)
 
     if (!url.trim()) {
       setError('Please enter a URL to check.')
@@ -21,6 +46,7 @@ function App() {
     }
 
     setLoading(true)
+    setCurrentStage('Initializing...')
 
     try {
       const endpoint = `${apiBaseUrl}/api/check-url/`
@@ -36,14 +62,22 @@ function App() {
 
       if (!response.ok) {
         setError(data.error || 'Could not check URL safety.')
+        setCurrentStage('')
         return
       }
 
+      setSessionId(data.sessionId)
       setResult(data)
+      setCurrentStage('')
     } catch {
       setError('Network error while calling the backend API.')
+      setCurrentStage('')
     } finally {
       setLoading(false)
+      if (progressInterval) {
+        clearInterval(progressInterval)
+        setProgressInterval(null)
+      }
     }
   }
 
@@ -95,7 +129,7 @@ function App() {
             aria-label="URL to check"
           />
           <button type="submit" disabled={loading}>
-            {loading ? 'Checking...' : 'Check URL'}
+            {loading ? (currentStage || 'Checking...') : 'Check URL'}
           </button>
         </form>
 
