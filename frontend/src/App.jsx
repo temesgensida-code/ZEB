@@ -38,12 +38,14 @@ function App() {
     setError('')
     setResult(null)
     setCurrentStage('')
-    setSessionId(null)
-
+    
     if (!url.trim()) {
       setError('Please enter a URL to check.')
       return
     }
+
+    const newSessionId = crypto.randomUUID()
+    setSessionId(newSessionId)
 
     setLoading(true)
     setCurrentStage('Initializing...')
@@ -55,7 +57,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, sessionId: newSessionId }),
       })
 
       const data = await response.json()
@@ -129,7 +131,7 @@ function App() {
             aria-label="URL to check"
           />
           <button type="submit" disabled={loading}>
-            {loading ? (currentStage || 'Checking...') : 'Check URL'}
+            {loading ? (currentStage ? `${currentStage}` : `Checking ${url}...`) : 'Check URL'}
           </button>
         </form>
 

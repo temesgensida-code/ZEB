@@ -44,7 +44,7 @@ class UrlSafetyCheckView(APIView):
 
 	def post(self, request):
 		raw_url = request.data.get('url', '')
-		session_id = str(uuid.uuid4())
+		session_id = request.data.get('sessionId') or str(uuid.uuid4())
 		
 		set_progress(session_id, 'Validating URL format...')
 		target_url = normalize_url(raw_url)
