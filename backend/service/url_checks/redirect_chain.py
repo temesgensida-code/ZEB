@@ -196,6 +196,9 @@ def analyze_redirect_chain(
             'finalUrlCategories': [],
             'schemeDowngrades': [],
             'shortenerHops': [],
+            'passedThroughShortener': False,
+            'hopCount': 0,
+            'hops': [],
             'openRedirectParams': [],
             'suspiciousRedirectHops': [],
         }
@@ -227,6 +230,9 @@ def analyze_redirect_chain(
             'finalUrlCategories': [],
             'schemeDowngrades': [],
             'shortenerHops': [],
+            'passedThroughShortener': False,
+            'hopCount': 0,
+            'hops': [],
             'openRedirectParams': [],
             'suspiciousRedirectHops': [],
         }
@@ -244,6 +250,9 @@ def analyze_redirect_chain(
             'finalUrlCategories': [],
             'schemeDowngrades': [],
             'shortenerHops': [],
+            'passedThroughShortener': False,
+            'hopCount': 0,
+            'hops': [],
             'openRedirectParams': [],
             'suspiciousRedirectHops': [],
         }
@@ -261,6 +270,9 @@ def analyze_redirect_chain(
             'finalUrlCategories': [],
             'schemeDowngrades': [],
             'shortenerHops': [],
+            'passedThroughShortener': False,
+            'hopCount': 0,
+            'hops': [],
             'openRedirectParams': [],
             'suspiciousRedirectHops': [],
         }
@@ -280,6 +292,9 @@ def analyze_redirect_chain(
             'finalUrlCategories': [],
             'schemeDowngrades': [],
             'shortenerHops': [],
+            'passedThroughShortener': False,
+            'hopCount': 0,
+            'hops': [],
             'openRedirectParams': [],
             'suspiciousRedirectHops': [],
         }
@@ -394,14 +409,38 @@ def analyze_redirect_chain(
             ),
         })
 
+    # Build rich hops list for UI display
+    rich_hops: list[dict] = []
+    prev_h = (urlparse(all_urls[0]).hostname or '').lower() if all_urls else ''
+    for hop_url, s_code in hop_pairs:
+        hop_host = (urlparse(hop_url).hostname or '').lower()
+        prev_scheme = urlparse(all_urls[hop_pairs.index((hop_url, s_code)) - 1]).scheme.lower() if hop_pairs.index((hop_url, s_code)) > 0 else ''
+        curr_scheme = urlparse(hop_url).scheme.lower()
+        is_short = hop_host in URL_SHORTENERS or _registered_domain(hop_host) in URL_SHORTENERS
+        is_cross = prev_h and hop_host and hop_host != prev_h
+        is_down = prev_scheme == 'https' and curr_scheme == 'http'
+        susp = any(d.get('hostname') == hop_host for d in suspicious_hops)
+        rich_hops.append({
+            'url': hop_url,
+            'statusCode': s_code,
+            'isShortener': is_short,
+            'crossOrigin': is_cross,
+            'schemeDowngrade': is_down,
+            'suspicious': susp,
+        })
+        prev_h = hop_host
+
     return {
         'available':              True,
         'redirectCount':          redirect_count,
+        'hopCount':               redirect_count,
         'tooManyRedirects':       too_many,
         'finalUrl':               response.url,
         'finalUrlCategories':     final_url_categories,
         'schemeDowngrades':       scheme_downgrades,
         'shortenerHops':          shortener_hops,
+        'passedThroughShortener': len(shortener_hops) > 0,
         'openRedirectParams':     all_open_redirect_params,
         'suspiciousRedirectHops': suspicious_hops,
+        'hops':                   rich_hops,
     }
