@@ -1,5 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
+import { IoShield } from "react-icons/io5";
+import { BiSolidSearch } from "react-icons/bi";
+import { PiTreeStructureFill } from "react-icons/pi";
+import { BsFillCalendarDateFill } from "react-icons/bs";
+import { FaDirections } from "react-icons/fa";
+import { AiFillCodeSandboxCircle } from "react-icons/ai";
+import { PiSirenFill } from "react-icons/pi";
+import { AiFillCheckSquare } from "react-icons/ai";
+import { AiFillExclamationCircle } from "react-icons/ai";
+import { FaLink } from "react-icons/fa";
+import { FaUnlock } from "react-icons/fa";
+import { FaKey } from "react-icons/fa6";
+import { FaFileWaveform } from "react-icons/fa6";
+import { MdError } from "react-icons/md";
+import { BiSolidHide } from "react-icons/bi";
+import { ImEmbed2 } from "react-icons/im";
+import { FaMinusSquare } from "react-icons/fa";
+import { BsInfoSquareFill } from "react-icons/bs";
+import { AiFillCloseSquare } from "react-icons/ai";
+import { AiFillCodeSandboxSquare } from "react-icons/ai";
+import { FaShieldAlt } from "react-icons/fa";
+import { FaSearch } from "react-icons/fa";
+
+
+
 import './App.css'
+
 
 // ─── Stage metadata for the progress bar ────────────────────────────────────
 const STAGES = [
@@ -7,37 +33,37 @@ const STAGES = [
     key: 'validating',
     label: 'Validating URL',
     detail: 'Checking the URL format, stripping tracking parameters, and normalising the address.',
-    icon: '🔍',
+    icon: <BiSolidSearch />,
   },
   {
     key: 'safe_browsing',
     label: 'Google Safe Browsing',
     detail: 'Querying Google\'s database of millions of known malware, phishing and scam sites.',
-    icon: '🛡️',
+    icon: <IoShield />,
   },
   {
     key: 'structure',
     label: 'Structure Analysis',
     detail: 'Inspecting the URL for IP-based hosts, suspicious domain extensions, and typosquatting patterns.',
-    icon: '🧩',
+    icon: <PiTreeStructureFill />,
   },
   {
     key: 'domain_age',
     label: 'Domain Age Check',
     detail: 'Looking up WHOIS records to see how old the domain is — newly registered domains are much riskier.',
-    icon: '📅',
+    icon: <BsFillCalendarDateFill />,
   },
   {
     key: 'redirect',
     label: 'Redirect Chain',
     detail: 'Following any redirects to find where the link actually leads, and flagging suspicious hops or shorteners.',
-    icon: '🔀',
+    icon: <FaDirections />,
   },
   {
     key: 'sandbox',
     label: 'Sandbox Preview',
     detail: 'Fetching the page content — without running any JavaScript — and scanning for phishing forms, hidden iframes, and obfuscated scripts.',
-    icon: '🧪',
+    icon: <AiFillCodeSandboxCircle />,
   },
 ]
 
@@ -130,9 +156,9 @@ function RiskGauge({ score }) {
 // ─── Verdict Badge ───────────────────────────────────────────────────────────
 function VerdictBadge({ verdict }) {
   const map = {
-    UNSAFE:   { color: 'badge-unsafe',   icon: '🚨', text: 'Unsafe' },
-    SAFE:     { color: 'badge-safe',     icon: '✅', text: 'Safe' },
-    UNSURE:   { color: 'badge-unsure',   icon: '⚠️', text: 'Caution' },
+    UNSAFE:   { color: 'badge-unsafe',   icon: <PiSirenFill />, text: 'Unsafe' },
+    SAFE:     { color: 'badge-safe',     icon: <AiFillCheckSquare />, text: 'Safe' },
+    UNSURE:   { color: 'badge-unsure',   icon: <AiFillExclamationCircle />, text: 'Caution' },
   }
   const b = map[verdict] || map.UNSURE
   return <span className={`verdict-badge ${b.color}`}>{b.icon} {b.text}</span>
@@ -146,7 +172,7 @@ function Section({ title, icon, flagged, children, defaultOpen = false }) {
       <button className="section-header" onClick={() => setOpen(o => !o)}>
         <span className="section-icon">{icon}</span>
         <span className="section-title">{title}</span>
-        {flagged && <span className="section-flag">⚠ Issues found</span>}
+        {flagged && <span className="section-flag"><AiFillExclamationCircle /> Issues found</span>}
         <span className="section-chevron">{open ? '▲' : '▼'}</span>
       </button>
       {open && <div className="section-body">{children}</div>}
@@ -173,7 +199,7 @@ function ShortenerPanel({ redirectAnalysis, inputUrl }) {
   const finalUrl = redirectAnalysis.finalUrl
   return (
     <div className="shortener-panel">
-      <div className="shortener-header">🔗 Shortened URL Detected</div>
+      <div className="shortener-header"><FaLink /> Shortened URL Detected</div>
       <p className="shortener-body">
         This link goes through a URL shortener. Shortened links hide the real destination — we've followed the chain to reveal it.
       </p>
@@ -234,7 +260,7 @@ function SandboxDetails({ sandbox }) {
   if (!available) {
     return (
       <div className="sandbox-unavailable">
-        <p>🔒 The page could not be fetched for static analysis — the site may be offline, geo-blocked, or rate-limiting crawlers.</p>
+        <p><FaUnlock /> The page could not be fetched for static analysis — the site may be offline, geo-blocked, or rate-limiting crawlers.</p>
         <p className="muted">This does not mean the URL is safe; it just means automated page inspection wasn't possible.</p>
       </div>
     )
@@ -252,7 +278,7 @@ function SandboxDetails({ sandbox }) {
 
       {matchedKeywords?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">🪤 Phishing Keywords Found on Page</p>
+          <p className="sandbox-group-title"><FaKey /> Phishing Keywords Found on Page</p>
           <p className="muted small">These pressure phrases are commonly used to trick visitors into handing over passwords or payment details.</p>
           <div className="keyword-chips">
             {matchedKeywords.map((kw, i) => <span key={i} className="chip chip-bad">{kw}</span>)}
@@ -262,7 +288,7 @@ function SandboxDetails({ sandbox }) {
 
       {fakeLoginForms?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">🎣 Suspicious Login Forms Detected</p>
+          <p className="sandbox-group-title"><FaFileWaveform /> Suspicious Login Forms Detected</p>
           <p className="muted small">The page contains form fields that collect credentials but submit to an unusual location — a classic phishing pattern.</p>
           {fakeLoginForms.map((f, i) => (
             <div key={i} className="code-block">
@@ -275,7 +301,7 @@ function SandboxDetails({ sandbox }) {
 
       {suspiciousScripts?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">⚠️ Suspicious Scripts Found</p>
+          <p className="sandbox-group-title"><MdError /> Suspicious Scripts Found</p>
           <p className="muted small">Scripts matching known obfuscation or data-exfiltration patterns were found. This could be used to steal cookies, keystrokes, or form data.</p>
           {suspiciousScripts.map((s, i) => (
             <div key={i} className="code-block">
@@ -287,7 +313,7 @@ function SandboxDetails({ sandbox }) {
 
       {hiddenIframes?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">🕳️ Hidden Iframes</p>
+          <p className="sandbox-group-title"><BiSolidHide /> Hidden Iframes</p>
           <p className="muted small">Invisible frames embedded in the page can silently load another website, steal clicks, or run malicious code without your knowledge.</p>
           {hiddenIframes.map((f, i) => <div key={i} className="code-block"><code>{f.src || JSON.stringify(f)}</code></div>)}
         </div>
@@ -295,7 +321,7 @@ function SandboxDetails({ sandbox }) {
 
       {metaRefreshUrls?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">⏩ Meta-Refresh Redirects</p>
+          <p className="sandbox-group-title"><FaDirections /> Meta-Refresh Redirects</p>
           <p className="muted small">The page will automatically redirect your browser to another site after a short delay — a trick used to bypass link scanners.</p>
           {metaRefreshUrls.map((u, i) => <div key={i} className="code-block"><code>{u}</code></div>)}
         </div>
@@ -303,7 +329,7 @@ function SandboxDetails({ sandbox }) {
 
       {sslIssues?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">🔓 SSL / Certificate Issues</p>
+          <p className="sandbox-group-title"><FaUnlock /> SSL / Certificate Issues</p>
           <p className="muted small">Problems with the site's HTTPS certificate. This means your connection may not be encrypted or the certificate may have been issued to a different site.</p>
           {sslIssues.map((s, i) => <div key={i} className="finding finding-bad"><span>🔴</span><p>{s.issue}</p></div>)}
         </div>
@@ -311,7 +337,7 @@ function SandboxDetails({ sandbox }) {
 
       {missingSecHeaders?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">🛡️ Missing Security Headers</p>
+          <p className="sandbox-group-title"><FaShieldAlt /> Missing Security Headers</p>
           <p className="muted small">Legitimate sites use these HTTP headers to protect visitors. Their absence doesn't mean a site is dangerous, but it's a quality signal.</p>
           <div className="keyword-chips">
             {missingSecHeaders.map((h, i) => <span key={i} className="chip chip-warn">{h}</span>)}
@@ -321,7 +347,7 @@ function SandboxDetails({ sandbox }) {
 
       {dataUriAbuses?.length > 0 && (
         <div className="sandbox-group">
-          <p className="sandbox-group-title">💣 Data-URI Abuse</p>
+          <p className="sandbox-group-title"><ImEmbed2 /> Data-URI Abuse</p>
           <p className="muted small">Scripts or frames using data: URIs to embed executable code directly in the page — a technique used to evade URL filters.</p>
           {dataUriAbuses.map((d, i) => <div key={i} className="code-block"><code>{d.context || JSON.stringify(d)}</code></div>)}
         </div>
@@ -362,7 +388,7 @@ function Results({ result }) {
       {/* Google threats */}
       {threats?.length > 0 && (
         <div className="threat-list">
-          <p className="threat-title">🚨 Google Safe Browsing Threats</p>
+          <p className="threat-title"><PiSirenFill/> Google Safe Browsing Threats</p>
           {threats.map((t, i) => (
             <div key={i} className="threat-item">
               <strong>{t.threatType}</strong>
@@ -387,7 +413,7 @@ function Results({ result }) {
         {/* Structure */}
         <Section
           title="URL & Domain Structure"
-          icon="🧩"
+          icon={<PiTreeStructureFill />}
           flagged={sa.findings?.some(f => f.flagged)}
           defaultOpen={true}
         >
@@ -406,7 +432,7 @@ function Results({ result }) {
             <div className="meta-item">
               <span className="meta-key">New Domain Risk</span>
               <span className={`meta-val ${sa.domainAge?.isNewDomain ? 'val-bad' : 'val-good'}`}>
-                {sa.domainAge?.isNewDomain === true ? '⚠ Yes — registered recently' : sa.domainAge?.isNewDomain === false ? '✓ No' : '—'}
+                {sa.domainAge?.isNewDomain === true ? <AiFillExclamationCircle/> : sa.domainAge?.isNewDomain === false ? <AiFillCheckSquare /> : <FaMinusSquare />}
               </span>
             </div>
             <div className="meta-item">
@@ -424,7 +450,7 @@ function Results({ result }) {
         {/* Redirect Chain */}
         <Section
           title="Redirect Chain"
-          icon="🔀"
+          icon={<FaDirections />}
           flagged={sa.hasRedirectRisk}
         >
           {redirect.tooManyRedirects && (
@@ -450,7 +476,7 @@ function Results({ result }) {
         {/* Sandbox */}
         <Section
           title="Sandbox Page Analysis"
-          icon="🧪"
+          icon={<AiFillCodeSandboxSquare />}
           flagged={hasSandboxRisk}
           defaultOpen={hasSandboxRisk}
         >
@@ -460,7 +486,7 @@ function Results({ result }) {
       </div>
 
       <p className="disclaimer">
-        ⚠ This tool cannot guarantee that any URL is 100% safe. Threats evolve constantly. Always exercise caution before entering personal information on unfamiliar sites.
+        <BsInfoSquareFill /> This tool cannot guarantee that any URL is 100% safe. Threats evolve constantly. Always exercise caution before entering personal information on unfamiliar sites.
       </p>
     </div>
   )
@@ -486,7 +512,7 @@ function InfoPanel({ onClose }) {
           ))}
         </div>
         <div className="info-shortener">
-          <span className="info-check-icon">🔗</span>
+          <span className="info-check-icon">{<FaLink />}</span>
           <div>
             <strong>Shortened URL Safety</strong>
             <p>Links from bit.ly, tinyurl.com, t.co and other shorteners hide their true destination. ZEB follows the entire redirect chain to reveal the final URL and analyses it for all the checks above.</p>
@@ -569,7 +595,7 @@ export default function App() {
         {/* Header */}
         <div className="card-header">
           <div className="logo-row">
-            <span className="logo-icon">🛡️</span>
+            <span className="logo-icon"><IoShield /></span>
             <div>
               <h1>ZEB</h1>
               <p className="tagline">URL Safety Checker</p>
@@ -591,7 +617,7 @@ export default function App() {
         {/* Input form */}
         <form className="checker-form" onSubmit={handleSubmit}>
           <div className="input-wrap">
-            <span className="input-icon">🔗</span>
+            <span className="input-icon"><FaLink /></span>
             <input
               ref={inputRef}
               type="text"
@@ -608,7 +634,13 @@ export default function App() {
             )}
           </div>
           <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? <span className="spinner" /> : '🔍 Check URL'}
+            {loading ? (
+              <span className="spinner" />
+              ) : (
+              <>
+                <FaSearch /> Check URL
+              </>
+              )}
           </button>
         </form>
 
@@ -618,7 +650,7 @@ export default function App() {
         {/* Error */}
         {error && (
           <div className="error-banner">
-            <span>❌</span>
+            <span><AiFillCloseSquare /></span>
             <p>{error}</p>
           </div>
         )}
