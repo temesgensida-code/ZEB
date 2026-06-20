@@ -1,0 +1,11 @@
+[build]
+  base    = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# Single-page app redirect: serve index.html for all routes so that
+# React Router can handle client-side navigation without 404s on refresh.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
