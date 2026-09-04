@@ -1,69 +1,78 @@
 import { useState, useEffect, useRef } from 'react'
-import { IoShield } from "react-icons/io5";
-import { BiSolidSearch } from "react-icons/bi";
-import { PiTreeStructureFill } from "react-icons/pi";
-import { BsFillCalendarDateFill } from "react-icons/bs";
-import { FaDirections } from "react-icons/fa";
-import { AiFillCodeSandboxCircle } from "react-icons/ai";
-import { PiSirenFill } from "react-icons/pi";
-import { AiFillCheckSquare } from "react-icons/ai";
-import { AiFillExclamationCircle } from "react-icons/ai";
-import { FaLink } from "react-icons/fa";
-import { FaUnlock } from "react-icons/fa";
-import { FaKey } from "react-icons/fa6";
-import { FaFileWaveform } from "react-icons/fa6";
-import { MdError } from "react-icons/md";
-import { BiSolidHide } from "react-icons/bi";
-import { ImEmbed2 } from "react-icons/im";
-import { FaMinusSquare } from "react-icons/fa";
-import { BsInfoSquareFill } from "react-icons/bs";
-import { AiFillCloseSquare } from "react-icons/ai";
-import { AiFillCodeSandboxSquare } from "react-icons/ai";
-import { FaShieldAlt } from "react-icons/fa";
-import { FaSearch } from "react-icons/fa";
-
-
+import {
+  LuShield,
+  LuShieldCheck,
+  LuShieldAlert,
+  LuShieldX,
+  LuSearch,
+  LuLink,
+  LuExternalLink,
+  LuCopy,
+  LuCheck,
+  LuX,
+  LuClipboard,
+  LuChevronDown,
+  LuInfo,
+  LuArrowDown,
+  LuCalendar,
+  LuNetwork,
+  LuCode,
+  LuSun,
+  LuMoon,
+  LuGlobe,
+  LuTriangleAlert,
+  LuCircleAlert,
+  LuCircleCheck,
+  LuCircleX,
+  LuEyeOff,
+  LuKey,
+  LuFileCode,
+  LuRefreshCw,
+  LuLock,
+  LuLockOpen,
+  LuFileText,
+  LuActivity,
+} from 'react-icons/lu'
 
 import './App.css'
 
-
-// ─── Stage metadata for the progress bar ────────────────────────────────────
+// ─── Stage Metadata for Multi-Stage Progress Scanner ─────────────────────────
 const STAGES = [
   {
     key: 'validating',
     label: 'Validating URL',
-    detail: 'Checking the URL format, stripping tracking parameters, and normalising the address.',
-    icon: <BiSolidSearch />,
+    detail: 'Sanitising address format, stripping tracking parameters, and resolving host protocols.',
+    icon: <LuSearch />,
   },
   {
     key: 'safe_browsing',
     label: 'Google Safe Browsing',
-    detail: 'Querying Google\'s database of millions of known malware, phishing and scam sites.',
-    icon: <IoShield />,
+    detail: 'Querying global databases for known malware distributions, phishing vectors, and malicious feeds.',
+    icon: <LuShield />,
   },
   {
     key: 'structure',
     label: 'Structure Analysis',
-    detail: 'Inspecting the URL for IP-based hosts, suspicious domain extensions, and typosquatting patterns.',
-    icon: <PiTreeStructureFill />,
+    detail: 'Inspecting hostname entropy, IP-based routing, suspicious TLDs, and typosquatting impersonation.',
+    icon: <LuNetwork />,
   },
   {
     key: 'domain_age',
-    label: 'Domain Age Check',
-    detail: 'Looking up WHOIS records to see how old the domain is — newly registered domains are much riskier.',
-    icon: <BsFillCalendarDateFill />,
+    label: 'Domain Age & WHOIS',
+    detail: 'Querying registrar records for registration velocity; newly minted domains carry significantly higher risk.',
+    icon: <LuCalendar />,
   },
   {
     key: 'redirect',
     label: 'Redirect Chain',
-    detail: 'Following any redirects to find where the link actually leads, and flagging suspicious hops or shorteners.',
-    icon: <FaDirections />,
+    detail: 'Tracing HTTP redirect hops, resolving obfuscated shorteners, and identifying protocol downgrades.',
+    icon: <LuActivity />,
   },
   {
     key: 'sandbox',
-    label: 'Sandbox Preview',
-    detail: 'Fetching the page content — without running any JavaScript — and scanning for phishing forms, hidden iframes, and obfuscated scripts.',
-    icon: <AiFillCodeSandboxCircle />,
+    label: 'Sandbox Passive Preview',
+    detail: 'Safely parsing DOM markup without executing JavaScript to detect credential harvesting forms and exfiltration scripts.',
+    icon: <LuCode />,
   },
 ]
 
@@ -80,39 +89,86 @@ function stageKeyFromLabel(label) {
   return null
 }
 
-// ─── Progress Bar Component ──────────────────────────────────────────────────
-function ProgressBar({ currentStageLabel }) {
-  const activeKey = stageKeyFromLabel(currentStageLabel)
-  const activeIndex = activeKey ? STAGES.findIndex(s => s.key === activeKey) : -1
-  const activeStage = activeIndex >= 0 ? STAGES[activeIndex] : null
-  const pct = activeIndex >= 0 ? Math.round(((activeIndex + 1) / STAGES.length) * 100) : 5
+// ─── Precision Risk Gauge Component ──────────────────────────────────────────
+function RiskGauge({ score }) {
+  const safeScore = Math.max(0, Math.min(100, score ?? 0))
+  const color = safeScore >= 60 ? 'var(--danger-accent)' : safeScore >= 30 ? 'var(--warn-accent)' : 'var(--safe-accent)'
+  const label = safeScore >= 60 ? 'High Risk' : safeScore >= 30 ? 'Medium Risk' : 'Low Risk'
+  
+  const r = 38
+  const cx = 48
+  const cy = 48
+  const circ = Math.PI * r
+  const filled = circ * (safeScore / 100)
 
   return (
-    <div className="progress-wrap">
-      <div className="progress-header">
-        <span className="progress-stage-name">
-          {activeStage ? `${activeStage.icon} ${activeStage.label}` : '⏳ Starting…'}
-        </span>
-        <span className="progress-pct">{pct}%</span>
+    <div className="risk-gauge-dial">
+      <svg viewBox="0 0 96 54" width="124" aria-label={`Risk gauge showing ${safeScore}/100`}>
+        {/* Track */}
+        <path
+          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+          fill="none"
+          stroke="var(--border-card)"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        {/* Gauge Arc */}
+        <path
+          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${circ}`}
+          style={{ transition: 'stroke-dasharray 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }}
+        />
+      </svg>
+      <div className="gauge-caption">
+        <span className="gauge-score-number" style={{ color }}>{safeScore}</span>
+        <span className="gauge-risk-status" style={{ color }}>{label}</span>
       </div>
-      {activeStage && (
-        <p className="progress-stage-detail">{activeStage.detail}</p>
-      )}
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
+// ─── Multi-Stage Progress Stepper ────────────────────────────────────────────
+function ProgressBar({ currentStageLabel }) {
+  const activeKey = stageKeyFromLabel(currentStageLabel)
+  const activeIndex = activeKey ? STAGES.findIndex(s => s.key === activeKey) : 0
+  const activeStage = STAGES[activeIndex] || STAGES[0]
+  const pct = Math.round(((activeIndex + 1) / STAGES.length) * 100)
+
+  return (
+    <div className="progress-card" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100">
+      <div className="progress-top-row">
+        <div className="active-stage-indicator">
+          <span className="micro-spinner" />
+          <span className="stage-step-count">STAGE {activeIndex + 1}/{STAGES.length}</span>
+          <span>{activeStage.label}</span>
+        </div>
+        <span className="progress-pct-badge">{pct}%</span>
       </div>
-      <div className="progress-steps">
-        {STAGES.map((s, i) => {
-          const done = i < activeIndex
-          const active = i === activeIndex
+
+      <p className="stage-detail-paragraph">{activeStage.detail}</p>
+
+      <div className="progress-track-rail">
+        <div className="progress-track-fill" style={{ width: `${pct}%` }} />
+      </div>
+
+      <div className="stepper-steps-grid">
+        {STAGES.map((s, idx) => {
+          const isDone = idx < activeIndex
+          const isActive = idx === activeIndex
           return (
             <div
               key={s.key}
-              className={`progress-step ${done ? 'done' : ''} ${active ? 'active' : ''}`}
-              title={s.label}
+              className={`stepper-node ${isDone ? 'done' : ''} ${isActive ? 'active' : ''} ${!isDone && !isActive ? 'pending' : ''}`}
+              title={`${s.label}: ${s.detail}`}
             >
-              <div className="step-dot">{done ? '✓' : active ? s.icon : ''}</div>
-              <span className="step-label">{s.label}</span>
+              <span className="step-marker-icon">
+                {isDone ? <LuCircleCheck /> : isActive ? <LuActivity /> : <span style={{ fontSize: '0.65rem' }}>{idx + 1}</span>}
+              </span>
+              <span className="step-node-name">{s.label}</span>
             </div>
           )
         })}
@@ -121,410 +177,501 @@ function ProgressBar({ currentStageLabel }) {
   )
 }
 
-// ─── Risk Score Gauge ────────────────────────────────────────────────────────
-function RiskGauge({ score }) {
-  const color = score >= 60 ? '#e53e3e' : score >= 30 ? '#dd6b20' : '#38a169'
-  const label = score >= 60 ? 'High Risk' : score >= 30 ? 'Medium Risk' : 'Low Risk'
-  const r = 38, cx = 48, cy = 48
-  const circ = Math.PI * r // half-circle
-  const filled = circ * (score / 100)
-
-  return (
-    <div className="risk-gauge">
-      <svg viewBox="0 0 96 56" width="120">
-        {/* Track */}
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round"
-        />
-        {/* Fill */}
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
-          strokeDasharray={`${filled} ${circ}`}
-          style={{ transition: 'stroke-dasharray 0.8s ease' }}
-        />
-      </svg>
-      <div className="gauge-label">
-        <span className="gauge-score" style={{ color }}>{score}</span>
-        <span className="gauge-sub">{label}</span>
-      </div>
-    </div>
-  )
-}
-
-// ─── Verdict Badge ───────────────────────────────────────────────────────────
-function VerdictBadge({ verdict }) {
-  const map = {
-    UNSAFE:   { color: 'badge-unsafe',   icon: <PiSirenFill />, text: 'Unsafe' },
-    SAFE:     { color: 'badge-safe',     icon: <AiFillCheckSquare />, text: 'Safe' },
-    UNSURE:   { color: 'badge-unsure',   icon: <AiFillExclamationCircle />, text: 'Caution' },
-  }
-  const b = map[verdict] || map.UNSURE
-  return <span className={`verdict-badge ${b.color}`}>{b.icon} {b.text}</span>
-}
-
-// ─── Collapsible Section ─────────────────────────────────────────────────────
-function Section({ title, icon, flagged, children, defaultOpen = false }) {
+// ─── Collapsible Accordion Section ───────────────────────────────────────────
+function CollapsibleSection({ title, icon, flaggedCount, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className={`section ${flagged ? 'section-flagged' : ''}`}>
-      <button className="section-header" onClick={() => setOpen(o => !o)}>
-        <span className="section-icon">{icon}</span>
-        <span className="section-title">{title}</span>
-        {flagged && <span className="section-flag"><AiFillExclamationCircle /> Issues found</span>}
-        <span className="section-chevron">{open ? '▲' : '▼'}</span>
+    <div className="accordion-section">
+      <button
+        type="button"
+        className="accordion-trigger"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <div className="accordion-title-cluster">
+          <span className="accordion-section-icon">{icon}</span>
+          <span className="accordion-section-label">{title}</span>
+          {flaggedCount > 0 && (
+            <span className="section-flag-badge">
+              <LuCircleAlert /> {flaggedCount} {flaggedCount === 1 ? 'flag' : 'flags'}
+            </span>
+          )}
+        </div>
+        <span className={`accordion-chevron-box ${open ? 'open' : ''}`}>
+          <LuChevronDown />
+        </span>
       </button>
-      {open && <div className="section-body">{children}</div>}
+      {open && <div className="accordion-body-container">{children}</div>}
     </div>
   )
 }
 
-// ─── Finding Row ─────────────────────────────────────────────────────────────
-function Finding({ f }) {
-  return (
-    <div className={`finding ${f.flagged ? 'finding-bad' : 'finding-ok'}`}>
-      <span className="finding-icon">{f.flagged ? '🔴' : '🟢'}</span>
-      <p className="finding-text">{f.explanation}</p>
-    </div>
-  )
-}
+// ─── Technical "How It Works" Modal ──────────────────────────────────────────
+function InfoModal({ onClose }) {
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
-// ─── Shortened URL Detection Panel ──────────────────────────────────────────
-function ShortenerPanel({ redirectAnalysis, inputUrl }) {
-  if (!redirectAnalysis) return null
-  const isShortener = redirectAnalysis.passedThroughShortener || redirectAnalysis.hops?.some(h => h.isShortener)
-  if (!isShortener) return null
-
-  const finalUrl = redirectAnalysis.finalUrl
   return (
-    <div className="shortener-panel">
-      <div className="shortener-header"><FaLink /> Shortened URL Detected</div>
-      <p className="shortener-body">
-        This link goes through a URL shortener. Shortened links hide the real destination — we've followed the chain to reveal it.
-      </p>
-      <div className="shortener-chain">
-        <div className="chain-item chain-start">
-          <span className="chain-label">Original</span>
-          <code>{inputUrl}</code>
-        </div>
-        <div className="chain-arrow">↓</div>
-        {redirectAnalysis.hops?.filter(h => h.isShortener).map((h, i) => (
-          <div key={i}>
-            <div className="chain-item chain-mid">
-              <span className="chain-label">Via shortener</span>
-              <code>{h.url}</code>
-            </div>
-            <div className="chain-arrow">↓</div>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+        <div className="modal-header-section">
+          <div className="modal-title-lockup">
+            <LuShield style={{ color: 'var(--c-400)', fontSize: '1.4rem' }} />
+            <h2 id="modal-title">How ZEB Inspects Links</h2>
           </div>
-        ))}
-        <div className="chain-item chain-end">
-          <span className="chain-label">Final destination</span>
-          <code>{finalUrl || 'Unknown'}</code>
+          <button type="button" className="modal-close-icon-btn" onClick={onClose} aria-label="Close modal">
+            <LuX />
+          </button>
+        </div>
+
+        <div className="modal-body-section">
+          <p className="modal-lead-paragraph">
+            ZEB employs a multi-tiered security pipeline combining real-time commercial threat intelligence with passive heuristic and content analysis. Each engine evaluates distinct attack surfaces before rendering a consolidated verdict.
+          </p>
+
+          <div className="engine-check-grid">
+            {STAGES.map(s => (
+              <div key={s.key} className="engine-check-card">
+                <span className="engine-card-icon">{s.icon}</span>
+                <div className="engine-card-details">
+                  <strong>{s.label}</strong>
+                  <p>{s.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="modal-safety-notice">
+            <strong>Passive Sandbox Guarantee:</strong> ZEB fetches DOM markup in a sandboxed parser without executing client-side scripts, keeping your machine insulated from drive-by downloads or zero-day browser exploits.
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Redirect Chain Hops ─────────────────────────────────────────────────────
-function RedirectHops({ hops }) {
-  if (!hops || hops.length === 0) return <p className="muted">No redirects followed.</p>
-  return (
-    <div className="hops">
-      {hops.map((hop, i) => (
-        <div key={i} className={`hop ${hop.suspicious ? 'hop-suspicious' : ''}`}>
-          <span className="hop-num">{i + 1}</span>
-          <div className="hop-info">
-            <code className="hop-url">{hop.url}</code>
-            <div className="hop-meta">
-              {hop.statusCode && <span className="tag">{hop.statusCode}</span>}
-              {hop.crossOrigin && <span className="tag tag-warn">Cross-origin</span>}
-              {hop.isShortener && <span className="tag tag-info">Shortener</span>}
-              {hop.schemeDowngrade && <span className="tag tag-bad">HTTPS→HTTP</span>}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ─── Sandbox Details ─────────────────────────────────────────────────────────
-function SandboxDetails({ sandbox }) {
-  if (!sandbox) return null
-
-  const { available, riskScore, matchedKeywords, fakeLoginForms, suspiciousScripts,
-          hiddenIframes, metaRefreshUrls, sslIssues, missingSecHeaders, dataUriAbuses } = sandbox
-
-  if (!available) {
-    return (
-      <div className="sandbox-unavailable">
-        <p><FaUnlock /> The page could not be fetched for static analysis — the site may be offline, geo-blocked, or rate-limiting crawlers.</p>
-        <p className="muted">This does not mean the URL is safe; it just means automated page inspection wasn't possible.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="sandbox-details">
-      <div className="sandbox-score-row">
-        <RiskGauge score={riskScore ?? 0} />
-        <div className="sandbox-score-explain">
-          <strong>Sandbox Risk Score</strong>
-          <p>A 0–100 score based on the passive page analysis. A higher number means more suspicious signals were detected on the page itself.</p>
-        </div>
-      </div>
-
-      {matchedKeywords?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><FaKey /> Phishing Keywords Found on Page</p>
-          <p className="muted small">These pressure phrases are commonly used to trick visitors into handing over passwords or payment details.</p>
-          <div className="keyword-chips">
-            {matchedKeywords.map((kw, i) => <span key={i} className="chip chip-bad">{kw}</span>)}
-          </div>
-        </div>
-      )}
-
-      {fakeLoginForms?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><FaFileWaveform /> Suspicious Login Forms Detected</p>
-          <p className="muted small">The page contains form fields that collect credentials but submit to an unusual location — a classic phishing pattern.</p>
-          {fakeLoginForms.map((f, i) => (
-            <div key={i} className="code-block">
-              <span className="tag tag-bad">Action: {f.action || 'unknown'}</span>
-              {f.hasPasswordField && <span className="tag tag-bad">Password field</span>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {suspiciousScripts?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><MdError /> Suspicious Scripts Found</p>
-          <p className="muted small">Scripts matching known obfuscation or data-exfiltration patterns were found. This could be used to steal cookies, keystrokes, or form data.</p>
-          {suspiciousScripts.map((s, i) => (
-            <div key={i} className="code-block">
-              <code>{s.pattern || s.src || JSON.stringify(s)}</code>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {hiddenIframes?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><BiSolidHide /> Hidden Iframes</p>
-          <p className="muted small">Invisible frames embedded in the page can silently load another website, steal clicks, or run malicious code without your knowledge.</p>
-          {hiddenIframes.map((f, i) => <div key={i} className="code-block"><code>{f.src || JSON.stringify(f)}</code></div>)}
-        </div>
-      )}
-
-      {metaRefreshUrls?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><FaDirections /> Meta-Refresh Redirects</p>
-          <p className="muted small">The page will automatically redirect your browser to another site after a short delay — a trick used to bypass link scanners.</p>
-          {metaRefreshUrls.map((u, i) => <div key={i} className="code-block"><code>{u}</code></div>)}
-        </div>
-      )}
-
-      {sslIssues?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><FaUnlock /> SSL / Certificate Issues</p>
-          <p className="muted small">Problems with the site's HTTPS certificate. This means your connection may not be encrypted or the certificate may have been issued to a different site.</p>
-          {sslIssues.map((s, i) => <div key={i} className="finding finding-bad"><span>🔴</span><p>{s.issue}</p></div>)}
-        </div>
-      )}
-
-      {missingSecHeaders?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><FaShieldAlt /> Missing Security Headers</p>
-          <p className="muted small">Legitimate sites use these HTTP headers to protect visitors. Their absence doesn't mean a site is dangerous, but it's a quality signal.</p>
-          <div className="keyword-chips">
-            {missingSecHeaders.map((h, i) => <span key={i} className="chip chip-warn">{h}</span>)}
-          </div>
-        </div>
-      )}
-
-      {dataUriAbuses?.length > 0 && (
-        <div className="sandbox-group">
-          <p className="sandbox-group-title"><ImEmbed2 /> Data-URI Abuse</p>
-          <p className="muted small">Scripts or frames using data: URIs to embed executable code directly in the page — a technique used to evade URL filters.</p>
-          {dataUriAbuses.map((d, i) => <div key={i} className="code-block"><code>{d.context || JSON.stringify(d)}</code></div>)}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main Results View ────────────────────────────────────────────────────────
-function Results({ result }) {
+// ─── Results Presentation Component ──────────────────────────────────────────
+function ResultsView({ result, onReset }) {
+  const [copiedKey, setCopiedKey] = useState(null)
   const { url, verdict, message, threats, structureAnalysis } = result
   const sa = structureAnalysis || {}
   const redirect = sa.redirectAnalysis || {}
   const sandbox = sa.sandboxPreview || null
 
-  const hasSandboxRisk = sandbox && (
-    (sandbox.matchedKeywords?.length > 0) ||
-    (sandbox.fakeLoginForms?.length > 0) ||
-    (sandbox.suspiciousScripts?.length > 0) ||
-    (sandbox.hiddenIframes?.length > 0) ||
-    (sandbox.sslIssues?.length > 0)
-  )
+  const isSafe = verdict === 'SAFE'
+  const isUnsafe = verdict === 'UNSAFE'
+  const isUnsure = !isSafe && !isUnsafe
+
+  const flaggedFindingsCount = sa.findings?.filter(f => f.flagged).length || 0
+  const hasShortener = redirect.passedThroughShortener || redirect.hops?.some(h => h.isShortener)
+  const hopCount = redirect.hopCount ?? (redirect.hops?.length || 0)
+
+  // Copy helper
+  function handleCopy(text, key) {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopiedKey(key)
+    setTimeout(() => setCopiedKey(null), 2000)
+  }
+
+  // Generate full markdown report for export
+  function copyFullReport() {
+    const report = [
+      `# ZEB URL Security Report`,
+      `• Target URL: ${url}`,
+      `• Verdict: ${verdict}`,
+      `• Summary: ${message}`,
+      `• Hostname: ${sa.hostname || 'N/A'}`,
+      `• Registered Domain: ${sa.registeredDomainFull || 'N/A'}`,
+      `• Domain Age: ${sa.domainAge?.available ? `${sa.domainAge.domainAgeDays} days` : 'Unknown'}`,
+      `• Redirect Hops: ${hopCount}`,
+      `• Final Destination: ${redirect.finalUrl || url}`,
+      `• Sandbox Risk Score: ${sandbox?.riskScore ?? 'N/A'}/100`,
+      threats?.length > 0 ? `• Threats Detected: ${threats.map(t => t.threatType).join(', ')}` : '• Threats: None detected via Google Safe Browsing',
+    ].join('\n')
+    handleCopy(report, 'full-report')
+  }
 
   return (
-    <div className={`results-wrap ${verdict === 'UNSAFE' ? 'result-unsafe' : verdict === 'SAFE' ? 'result-safe' : 'result-unsure'}`}>
-      {/* Top summary row */}
-      <div className="result-summary">
-        <div className="result-url-row">
-          <span className="result-url-label">Checked URL</span>
-          <code className="result-url">{url}</code>
+    <div className={`results-shell ${isSafe ? 'status-safe' : isUnsafe ? 'status-unsafe' : isUnsure ? 'status-unsure' : ''}`}>
+      {/* Top Verdict Hero */}
+      <div className="verdict-hero">
+        <div className="verdict-header-row">
+          <div className={`verdict-badge-prominent ${isSafe ? 'badge-prominent-safe' : isUnsafe ? 'badge-prominent-unsafe' : isUnsure ? 'badge-prominent-unsure' : ''}`}>
+            {isSafe ? <LuShieldCheck /> : isUnsafe ? <LuShieldX /> : <LuShieldAlert />}
+            <span>VERDICT: {verdict}</span>
+          </div>
+
+          <div className="quick-stats-strip">
+            <span className="quick-stat-item">
+              <LuGlobe style={{ marginRight: 4 }} />
+              {sa.hostname || 'Domain'}
+            </span>
+            <span className="quick-stat-item">
+              <LuActivity style={{ marginRight: 4 }} />
+              {hopCount} {hopCount === 1 ? 'Hop' : 'Hops'}
+            </span>
+            {sandbox?.available && (
+              <span className="quick-stat-item">
+                <LuCode style={{ marginRight: 4 }} />
+                Score: {sandbox.riskScore ?? 0}/100
+              </span>
+            )}
+          </div>
         </div>
-        <div className="result-verdict-row">
-          <VerdictBadge verdict={verdict} />
-          <p className="result-message">{message}</p>
+
+        {/* Target URL Console Row */}
+        <div className="target-url-console">
+          <div className="target-url-group">
+            <span className="target-url-label">TARGET:</span>
+            <code className="target-url-code" title={url}>{url}</code>
+          </div>
+          <div className="url-action-btns">
+            <button
+              type="button"
+              className={`copy-mini-btn ${copiedKey === 'target-url' ? 'copied' : ''}`}
+              onClick={() => handleCopy(url, 'target-url')}
+              aria-label="Copy inspected URL"
+            >
+              {copiedKey === 'target-url' ? <><LuCheck /> Copied</> : <><LuCopy /> Copy URL</>}
+            </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="copy-mini-btn"
+              title="Open URL in separate tab (Caution)"
+            >
+              <LuExternalLink /> Visit
+            </a>
+          </div>
         </div>
+
+        <p className="verdict-explanation-msg">{message}</p>
       </div>
 
-      {/* Google threats */}
+      {/* Google Safe Browsing Threats Banner (if present) */}
       {threats?.length > 0 && (
-        <div className="threat-list">
-          <p className="threat-title"><PiSirenFill/> Google Safe Browsing Threats</p>
-          {threats.map((t, i) => (
-            <div key={i} className="threat-item">
-              <strong>{t.threatType}</strong>
-              <span className="muted"> — {t.platformType}</span>
-              <p className="muted small">
-                {t.threatType === 'MALWARE' && 'This site has been flagged for distributing software that can damage your device or steal data.'}
-                {t.threatType === 'SOCIAL_ENGINEERING' && 'This site has been flagged for impersonating trusted brands to trick users into giving up passwords or financial information (phishing).'}
-                {t.threatType === 'UNWANTED_SOFTWARE' && 'This site may install unwanted programs without your consent — adware, browser hijackers, or similar.'}
-                {!['MALWARE','SOCIAL_ENGINEERING','UNWANTED_SOFTWARE'].includes(t.threatType) && 'This URL matches a threat category in Google\'s Safe Browsing database.'}
+        <div className="threat-module">
+          <div className="threat-module-title">
+            <LuTriangleAlert />
+            <span>Google Safe Browsing Threats Identified</span>
+          </div>
+          {threats.map((t, idx) => (
+            <div key={idx} className="threat-record">
+              <div className="threat-record-header">
+                <span className="threat-badge">{t.threatType}</span>
+                <span className="threat-platform">Platform: {t.platformType}</span>
+              </div>
+              <p className="threat-explanation">
+                {t.threatType === 'MALWARE' && 'Confirmed host for malware distribution capable of damaging hardware or extracting sensitive credentials.'}
+                {t.threatType === 'SOCIAL_ENGINEERING' && 'Deceptive phishing surface impersonating trusted entities to harvest login credentials or payment data.'}
+                {t.threatType === 'UNWANTED_SOFTWARE' && 'Distributes unwanted toolbars, adware, or background crypto-mining software.'}
+                {!['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE'].includes(t.threatType) && 'Matches verified malicious pattern in Google threat databases.'}
               </p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Shortened URL panel */}
-      <ShortenerPanel redirectAnalysis={redirect} inputUrl={url} />
-
-      {/* Collapsible sections */}
-      <div className="sections">
-
-        {/* Structure */}
-        <Section
-          title="URL & Domain Structure"
-          icon={<PiTreeStructureFill />}
-          flagged={sa.findings?.some(f => f.flagged)}
-          defaultOpen={true}
-        >
-          <div className="meta-grid">
-            <div className="meta-item"><span className="meta-key">Host</span><span className="meta-val">{sa.hostname || '—'}</span></div>
-            <div className="meta-item"><span className="meta-key">Registered Domain</span><span className="meta-val">{sa.registeredDomainFull || '—'}</span></div>
-            <div className="meta-item"><span className="meta-key">TLD</span><span className="meta-val">.{sa.tld || '—'}</span></div>
-            <div className="meta-item">
-              <span className="meta-key">Domain Age</span>
-              <span className="meta-val">
-                {sa.domainAge?.available
-                  ? `${sa.domainAge.domainAgeDays} days`
-                  : 'Could not retrieve'}
-              </span>
-            </div>
-            <div className="meta-item">
-              <span className="meta-key">New Domain Risk</span>
-              <span className={`meta-val ${sa.domainAge?.isNewDomain ? 'val-bad' : 'val-good'}`}>
-                {sa.domainAge?.isNewDomain === true ? <AiFillExclamationCircle/> : sa.domainAge?.isNewDomain === false ? <AiFillCheckSquare /> : <FaMinusSquare />}
-              </span>
-            </div>
-            <div className="meta-item">
-              <span className="meta-key">IP-Based Host</span>
-              <span className={`meta-val ${sa.isIpBased ? 'val-bad' : 'val-good'}`}>
-                {sa.isIpBased ? '⚠ Yes' : '✓ No'}
-              </span>
-            </div>
+      {/* Shortener & Redirect Pipeline */}
+      {hasShortener && (
+        <div className="shortener-pipeline-card">
+          <div className="pipeline-header">
+            <LuNetwork />
+            <span>Obfuscated Shortener Chain Detected</span>
           </div>
-          <div className="findings-list">
-            {sa.findings?.map((f, i) => <Finding key={i} f={f} />)}
-          </div>
-        </Section>
+          <p className="pipeline-desc">
+            This URL passes through a shortening gateway to mask its final destination. ZEB navigated the redirect chain to expose the terminal endpoint.
+          </p>
 
-        {/* Redirect Chain */}
-        <Section
-          title="Redirect Chain"
-          icon={<FaDirections />}
-          flagged={sa.hasRedirectRisk}
-        >
-          {redirect.tooManyRedirects && (
-            <div className="finding finding-bad">
-              <span>🔴</span>
-              <p>Too many redirects ({redirect.hopCount}). Excessive redirects often indicate cloaking — showing a different page to scanners than to real visitors.</p>
-            </div>
-          )}
-          {redirect.finalUrl && (
-            <div className="meta-item" style={{marginBottom:'12px'}}>
-              <span className="meta-key">Final Destination</span>
-              <code className="meta-val">{redirect.finalUrl}</code>
-            </div>
-          )}
-          {redirect.finalUrlCategories?.length > 0 && (
-            <div className="keyword-chips" style={{marginBottom:'12px'}}>
-              {redirect.finalUrlCategories.map((c, i) => <span key={i} className="chip chip-info">{c.replace(/_/g,' ')}</span>)}
-            </div>
-          )}
-          <RedirectHops hops={redirect.hops} />
-        </Section>
-
-        {/* Sandbox */}
-        <Section
-          title="Sandbox Page Analysis"
-          icon={<AiFillCodeSandboxSquare />}
-          flagged={hasSandboxRisk}
-          defaultOpen={hasSandboxRisk}
-        >
-          <SandboxDetails sandbox={sandbox} />
-        </Section>
-
-      </div>
-
-      <p className="disclaimer">
-        <BsInfoSquareFill /> This tool cannot guarantee that any URL is 100% safe. Threats evolve constantly. Always exercise caution before entering personal information on unfamiliar sites.
-      </p>
-    </div>
-  )
-}
-
-// ─── Info Panel ──────────────────────────────────────────────────────────────
-function InfoPanel({ onClose }) {
-  return (
-    <div className="info-overlay" onClick={onClose}>
-      <div className="info-modal" onClick={e => e.stopPropagation()}>
-        <button className="info-close" onClick={onClose}>✕</button>
-        <h2>How ZEB Checks URLs</h2>
-        <p className="info-intro">ZEB runs up to six independent checks, from fast database lookups to full passive page analysis. Here's what each one does and why it matters.</p>
-        <div className="info-checks">
-          {STAGES.map(s => (
-            <div key={s.key} className="info-check">
-              <span className="info-check-icon">{s.icon}</span>
-              <div>
-                <strong>{s.label}</strong>
-                <p>{s.detail}</p>
+          <div className="pipeline-chain">
+            <div className="chain-hop-box origin">
+              <div className="chain-hop-meta">
+                <span className="chain-hop-tag">Initial Entrypoint</span>
+                <code className="chain-hop-url">{url}</code>
               </div>
             </div>
-          ))}
-        </div>
-        <div className="info-shortener">
-          <span className="info-check-icon">{<FaLink />}</span>
-          <div>
-            <strong>Shortened URL Safety</strong>
-            <p>Links from bit.ly, tinyurl.com, t.co and other shorteners hide their true destination. ZEB follows the entire redirect chain to reveal the final URL and analyses it for all the checks above.</p>
+
+            <div className="chain-arrow-separator">
+              <LuArrowDown />
+            </div>
+
+            {redirect.hops?.filter(h => h.isShortener).map((hop, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="chain-hop-box intermediate">
+                  <div className="chain-hop-meta">
+                    <span className="chain-hop-tag">Shortener Gateway ({hop.statusCode || '301'})</span>
+                    <code className="chain-hop-url">{hop.url}</code>
+                  </div>
+                </div>
+                <div className="chain-arrow-separator">
+                  <LuArrowDown />
+                </div>
+              </div>
+            ))}
+
+            <div className="chain-hop-box destination">
+              <div className="chain-hop-meta">
+                <span className="chain-hop-tag" style={{ color: 'var(--safe-text)' }}>Resolved Final Destination</span>
+                <code className="chain-hop-url">{redirect.finalUrl || url}</code>
+              </div>
+              <button
+                type="button"
+                className={`copy-mini-btn ${copiedKey === 'final-url' ? 'copied' : ''}`}
+                onClick={() => handleCopy(redirect.finalUrl || url, 'final-url')}
+                aria-label="Copy resolved destination URL"
+              >
+                {copiedKey === 'final-url' ? <><LuCheck /> Copied</> : <><LuCopy /> Copy Destination</>}
+              </button>
+            </div>
           </div>
         </div>
-        <p className="info-caveat">No automated tool can guarantee 100% safety. ZEB is one layer of protection — always use your own judgement too.</p>
+      )}
+
+      {/* Collapsible Sections Accordion */}
+      <div className="sections-accordion">
+        {/* Section 1: Domain Architecture */}
+        <CollapsibleSection
+          title="URL & Domain Architecture"
+          icon={<LuGlobe />}
+          flaggedCount={flaggedFindingsCount}
+          defaultOpen={true}
+        >
+          <div className="metric-tiles-grid">
+            <div className="metric-tile">
+              <span className="metric-tile-label">Hostname</span>
+              <span className="metric-tile-value" title={sa.hostname}>{sa.hostname || '—'}</span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">Registered Domain</span>
+              <span className="metric-tile-value" title={sa.registeredDomainFull}>{sa.registeredDomainFull || '—'}</span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">TLD Zone</span>
+              <span className="metric-tile-value">.{sa.tld || '—'}</span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">Domain Age</span>
+              <span className="metric-tile-value">
+                {sa.domainAge?.available ? `${sa.domainAge.domainAgeDays} days` : 'Lookup Unavailable'}
+              </span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">Velocity Risk</span>
+              <span className={`metric-tile-value ${sa.domainAge?.isNewDomain ? 'val-danger' : 'val-safe'}`}>
+                {sa.domainAge?.isNewDomain ? 'High (Recent Reg)' : 'Verified Historical'}
+              </span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">Host Routing</span>
+              <span className={`metric-tile-value ${sa.isIpBased ? 'val-warn' : 'val-safe'}`}>
+                {sa.isIpBased ? 'Direct IP Host' : 'Named DNS Domain'}
+              </span>
+            </div>
+          </div>
+
+          {/* Structural findings */}
+          <div className="findings-stream">
+            {sa.findings?.map((f, i) => (
+              <div key={i} className={`finding-row ${f.flagged ? 'flagged' : 'clean'}`}>
+                <span className="finding-dot">
+                  {f.flagged ? <LuCircleAlert /> : <LuCircleCheck />}
+                </span>
+                <span className="finding-desc">{f.explanation}</span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleSection>
+
+        {/* Section 2: Redirect Chain */}
+        <CollapsibleSection
+          title="Redirect Chain & Protocol Integrity"
+          icon={<LuNetwork />}
+          flaggedCount={redirect.tooManyRedirects || redirect.hops?.some(h => h.suspicious) ? 1 : 0}
+          defaultOpen={false}
+        >
+          {redirect.tooManyRedirects && (
+            <div className="finding-row flagged" style={{ marginBottom: 12 }}>
+              <span className="finding-dot"><LuCircleAlert /></span>
+              <span className="finding-desc">
+                Excessive redirect count ({redirect.hopCount} hops). Often employed by cloaking networks to evade automated inspection.
+              </span>
+            </div>
+          )}
+
+          {redirect.hops && redirect.hops.length > 0 ? (
+            <div className="hops-stream">
+              {redirect.hops.map((hop, i) => (
+                <div key={i} className={`hop-card ${hop.suspicious ? 'hop-warn' : ''}`}>
+                  <span className="hop-index-badge">{i + 1}</span>
+                  <div className="hop-content">
+                    <code className="hop-url-text">{hop.url}</code>
+                    <div className="hop-tags-cluster">
+                      {hop.statusCode && <span className="meta-chip">HTTP {hop.statusCode}</span>}
+                      {hop.crossOrigin && <span className="meta-chip chip-warn">Cross-Origin</span>}
+                      {hop.isShortener && <span className="meta-chip chip-info">Shortener</span>}
+                      {hop.schemeDowngrade && <span className="meta-chip chip-bad">HTTPS → HTTP Downgrade</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="finding-desc" style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+              Direct destination reached with zero intermediate redirects.
+            </p>
+          )}
+        </CollapsibleSection>
+
+        {/* Section 3: Passive Sandbox Preview */}
+        <CollapsibleSection
+          title="Passive Sandbox & Content Scan"
+          icon={<LuCode />}
+          flaggedCount={sandbox?.riskScore >= 25 ? 1 : 0}
+          defaultOpen={sandbox?.riskScore >= 25}
+        >
+          {sandbox?.available ? (
+            <div>
+              <div className="sandbox-hero-cluster">
+                <RiskGauge score={sandbox.riskScore ?? 0} />
+                <div className="sandbox-hero-explain">
+                  <strong>Static Heuristic Risk Metric</strong>
+                  <p>
+                    Evaluated passively across HTML markup, metadata tags, and form actions. Higher values signal aggressive credential-harvesting indicators or obfuscated evasion scripts.
+                  </p>
+                </div>
+              </div>
+
+              {sandbox.matchedKeywords?.length > 0 && (
+                <div className="sandbox-group-block">
+                  <div className="sandbox-group-title">
+                    <LuKey /> Phishing Keywords Found
+                  </div>
+                  <p className="sandbox-group-subtitle">Urgency pressure keywords frequently associated with unauthorized password resets or billing fraud.</p>
+                  <div className="chips-cloud">
+                    {sandbox.matchedKeywords.map((kw, i) => (
+                      <span key={i} className="meta-chip chip-bad">{kw}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sandbox.fakeLoginForms?.length > 0 && (
+                <div className="sandbox-group-block">
+                  <div className="sandbox-group-title">
+                    <LuFileCode /> Suspicious Form Actions
+                  </div>
+                  <p className="sandbox-group-subtitle">Credential-accepting form fields submitting payloads to foreign or unusual endpoints.</p>
+                  {sandbox.fakeLoginForms.map((f, i) => (
+                    <div key={i} className="code-box-display">
+                      <span>Action: {f.action || 'Unknown'}</span>
+                      {f.hasPasswordField && <span style={{ marginLeft: 10, color: 'var(--danger-text)' }}>[Password Input Detected]</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {sandbox.suspiciousScripts?.length > 0 && (
+                <div className="sandbox-group-block">
+                  <div className="sandbox-group-title">
+                    <LuCircleAlert /> Obfuscated Scripts
+                  </div>
+                  <p className="sandbox-group-subtitle">Script blocks matching known hex-encoding or evaluation wrappers.</p>
+                  {sandbox.suspiciousScripts.map((s, i) => (
+                    <div key={i} className="code-box-display">
+                      <code>{s.pattern || s.src || JSON.stringify(s)}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {sandbox.hiddenIframes?.length > 0 && (
+                <div className="sandbox-group-block">
+                  <div className="sandbox-group-title">
+                    <LuEyeOff /> Zero-Pixel Hidden IFrames
+                  </div>
+                  <p className="sandbox-group-subtitle">Invisible embedded frames capable of silent clickjacking or foreign session hijacking.</p>
+                  {sandbox.hiddenIframes.map((f, i) => (
+                    <div key={i} className="code-box-display">
+                      <code>{f.src || JSON.stringify(f)}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {sandbox.sslIssues?.length > 0 && (
+                <div className="sandbox-group-block">
+                  <div className="sandbox-group-title">
+                    <LuLockOpen /> SSL / TLS Certificate Issues
+                  </div>
+                  {sandbox.sslIssues.map((s, i) => (
+                    <div key={i} className="finding-row flagged">
+                      <span className="finding-dot"><LuCircleAlert /></span>
+                      <span className="finding-desc">{s.issue}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {sandbox.missingSecHeaders?.length > 0 && (
+                <div className="sandbox-group-block">
+                  <div className="sandbox-group-title">
+                    <LuShield /> Missing Hardening Headers
+                  </div>
+                  <p className="sandbox-group-subtitle">Recommended HTTP security headers absent from target server response.</p>
+                  <div className="chips-cloud">
+                    {sandbox.missingSecHeaders.map((h, i) => (
+                      <span key={i} className="meta-chip chip-warn">{h}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="finding-row clean">
+              <span className="finding-dot"><LuLock /></span>
+              <span className="finding-desc">
+                Static page preview could not be fetched (site may be behind geo-restrictions, Cloudflare bot-checks, or offline).
+              </span>
+            </div>
+          )}
+        </CollapsibleSection>
+      </div>
+
+      {/* Report Action Bar */}
+      <div className="report-action-bar">
+        <span className="report-notice-text">
+          <LuInfo /> Automated passive scan completed safely.
+        </span>
+
+        <div className="report-btns-group">
+          <button
+            type="button"
+            className="action-icon-btn"
+            onClick={copyFullReport}
+          >
+            {copiedKey === 'full-report' ? <><LuCheck /> Copied Report</> : <><LuFileText /> Copy Report</>}
+          </button>
+          <button
+            type="button"
+            className="action-icon-btn"
+            onClick={onReset}
+          >
+            <LuRefreshCw /> Scan Another URL
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
-// ─── App Root ─────────────────────────────────────────────────────────────────
+// ─── Main Application Console Root ───────────────────────────────────────────
 export default function App() {
   const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
   const [url, setUrl] = useState('')
@@ -534,9 +681,46 @@ export default function App() {
   const [showInfo, setShowInfo] = useState(false)
   const [currentStage, setCurrentStage] = useState('')
   const [sessionId, setSessionId] = useState(null)
+
+  // Theme state: defaults to Charcoal Dark mode to honor user palette preview
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('zeb-theme') || 'dark'
+  })
+
   const inputRef = useRef(null)
 
-  // Poll for progress
+  // Sync theme with documentElement
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('zeb-theme', theme)
+  }, [theme])
+
+  function toggleTheme() {
+    setTheme(t => (t === 'dark' ? 'light' : 'dark'))
+  }
+
+  // Global keyboard shortcuts: "/" or "Ctrl+K" focuses input, "Esc" closes modal
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.key === 'Escape') {
+          e.target.blur()
+        }
+        return
+      }
+      if (e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+        e.preventDefault()
+        inputRef.current?.focus()
+      } else if (e.key === '?') {
+        e.preventDefault()
+        setShowInfo(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Poll progress during active scan
   useEffect(() => {
     if (!sessionId || !loading) return
     const iv = setInterval(async () => {
@@ -544,20 +728,22 @@ export default function App() {
         const r = await fetch(`${apiBaseUrl}/api/check-progress/?sessionId=${sessionId}`)
         const d = await r.json()
         if (d.currentStage) setCurrentStage(d.currentStage)
-      } catch {}
+      } catch (_err) {
+        void _err
+      }
     }, 350)
     return () => clearInterval(iv)
   }, [sessionId, loading, apiBaseUrl])
 
   async function handleSubmit(e) {
-    e.preventDefault()
+    if (e) e.preventDefault()
     setError('')
     setResult(null)
     setCurrentStage('')
 
     const trimmed = url.trim()
     if (!trimmed) {
-      setError('Please enter a URL to check.')
+      setError('Please provide a valid web URL or shortened link to inspect.')
       inputRef.current?.focus()
       return
     }
@@ -575,88 +761,205 @@ export default function App() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || 'Could not check URL safety. Please try again.')
+        setError(data.error || 'Could not complete safety audit. Please verify server connectivity.')
         return
       }
       setResult(data)
     } catch {
-      setError('Network error — could not reach the backend. Check your connection and try again.')
+      setError('Network communication failed. Please ensure the backend server is running.')
     } finally {
       setLoading(false)
       setCurrentStage('')
     }
   }
 
+  // Quick preset test selector
+  function handleSelectPreset(presetUrl) {
+    setUrl(presetUrl)
+    setError('')
+    setResult(null)
+    inputRef.current?.focus()
+  }
+
+  // Paste helper
+  async function handlePaste() {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text) {
+        setUrl(text)
+        setError('')
+        inputRef.current?.focus()
+      }
+    } catch (_err) {
+      void _err
+    }
+  }
+
   return (
     <div className="page">
-      {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
+      {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
 
       <main className="card">
-        {/* Header */}
-        <div className="card-header">
-          <div className="logo-row">
-            <span className="logo-icon"><IoShield /></span>
-            <div>
-              <h1>ZEB</h1>
-              <p className="tagline">URL Safety Checker</p>
+        {/* Header Bar */}
+        <div className="card-header-bar">
+          <div className="brand-lockup">
+            <div className="shield-badge">
+              <LuShield />
+            </div>
+            <div className="brand-info">
+              <div className="brand-title-row">
+                <h1 className="brand-name">ZEB</h1>
+                <span className="version-chip">v2.4 Engine</span>
+              </div>
+              <div className="engine-status-row">
+                <span className="status-beacon" />
+                <span className="engine-status-text">Passive Threat Heuristics Active</span>
+              </div>
             </div>
           </div>
-          <button
-            className="info-btn"
-            onClick={() => setShowInfo(true)}
-            aria-label="How it works"
-          >
-            ? How it works
-          </button>
+
+          <div className="header-actions">
+            <button
+              type="button"
+              className="action-icon-btn"
+              onClick={() => setShowInfo(true)}
+              title="Inspect checking methodology (?)"
+            >
+              <LuInfo />
+              <span>How it works</span>
+              <kbd className="kbd-hint">?</kbd>
+            </button>
+
+            <button
+              type="button"
+              className="action-icon-btn"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+              aria-label="Toggle visual theme"
+            >
+              {theme === 'dark' ? <LuSun /> : <LuMoon />}
+            </button>
+          </div>
         </div>
 
-        <p className="subtitle">
-          Paste any URL — including shortened links like bit.ly — to check it for malware, phishing, suspicious redirects, and more before you click.
-        </p>
+        {/* Card Content Area */}
+        <div className="card-content">
+          <p className="console-description">
+            Inspect any web link, domain, or shortened redirect before interacting. Passive scanners check Google threat feeds, WHOIS registration velocity, and DOM phishing heuristics.
+          </p>
 
-        {/* Input form */}
-        <form className="checker-form" onSubmit={handleSubmit}>
-          <div className="input-wrap">
-            <span className="input-icon"><FaLink /></span>
-            <input
-              ref={inputRef}
-              type="text"
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              placeholder="https://example.com or bit.ly/abc123"
-              aria-label="URL to check"
-              disabled={loading}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            {url && !loading && (
-              <button type="button" className="clear-btn" onClick={() => { setUrl(''); setResult(null); setError(''); inputRef.current?.focus() }}>✕</button>
-            )}
-          </div>
-          <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? (
-              <span className="spinner" />
+          {/* Search Form */}
+          <form className="checker-form" onSubmit={handleSubmit}>
+            <div className="input-shell">
+              <span className="input-leading-icon">
+                <LuLink />
+              </span>
+              <input
+                ref={inputRef}
+                type="text"
+                className="url-input-field"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder="Paste URL (e.g. github.com, bit.ly/sample, http://192.168.1.1)"
+                aria-label="URL to inspect"
+                disabled={loading}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <div className="input-trailing-actions">
+                {url && !loading && (
+                  <button
+                    type="button"
+                    className="input-util-btn"
+                    onClick={() => { setUrl(''); setResult(null); setError(''); inputRef.current?.focus() }}
+                    title="Clear input"
+                  >
+                    <LuX />
+                  </button>
+                )}
+                {!url && !loading && (
+                  <button
+                    type="button"
+                    className="input-util-btn"
+                    onClick={handlePaste}
+                    title="Paste from clipboard"
+                  >
+                    <LuClipboard />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <button type="submit" className="check-submit-btn" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="micro-spinner" />
+                  <span>Inspecting...</span>
+                </>
               ) : (
-              <>
-                <FaSearch /> Check URL
-              </>
+                <>
+                  <LuSearch />
+                  <span>Check URL</span>
+                </>
               )}
-          </button>
-        </form>
+            </button>
+          </form>
 
-        {/* Progress bar */}
-        {loading && <ProgressBar currentStageLabel={currentStage} />}
-
-        {/* Error */}
-        {error && (
-          <div className="error-banner">
-            <span><AiFillCloseSquare /></span>
-            <p>{error}</p>
+          {/* Quick Test Presets */}
+          <div className="quick-presets-row">
+            <span className="presets-label">Test Samples:</span>
+            <button
+              type="button"
+              className="preset-pill"
+              onClick={() => handleSelectPreset('https://github.com')}
+            >
+              <span>Clean:</span> <code>github.com</code>
+            </button>
+            <button
+              type="button"
+              className="preset-pill"
+              onClick={() => handleSelectPreset('https://bit.ly/3xSecurityDemo')}
+            >
+              <span>Shortener:</span> <code>bit.ly/sample</code>
+            </button>
+            <button
+              type="button"
+              className="preset-pill"
+              onClick={() => handleSelectPreset('http://192.168.1.1/login')}
+            >
+              <span>IP Host:</span> <code>192.168.1.1</code>
+            </button>
           </div>
-        )}
 
-        {/* Results */}
-        {result && !loading && <Results result={result} />}
+          {/* Real-time Multi-Stage Progress Scanner */}
+          {loading && <ProgressBar currentStageLabel={currentStage} />}
+
+          {/* Error Banner */}
+          {error && (
+            <div className="error-banner" role="alert">
+              <span className="error-banner-icon">
+                <LuCircleX />
+              </span>
+              <div className="error-banner-content">
+                <div className="error-banner-title">Inspection Error</div>
+                <div className="error-banner-desc">{error}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Comprehensive Results Display */}
+          {result && !loading && (
+            <ResultsView
+              result={result}
+              onReset={() => {
+                setResult(null)
+                setUrl('')
+                setError('')
+                inputRef.current?.focus()
+              }}
+            />
+          )}
+        </div>
       </main>
     </div>
   )
