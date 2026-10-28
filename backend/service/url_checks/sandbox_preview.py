@@ -34,11 +34,13 @@ from bs4 import BeautifulSoup
 
 from .common import detect_typosquatting_brand, is_ip_host, is_ip_like_host
 from .constants import (
+    EXFILTRATION_SINK_PATTERNS,
     SANDBOX_HTML_LIMIT,
     SANDBOX_KEYWORDS,
     SUSPICIOUS_SCRIPT_PATTERNS,
     SUSPICIOUS_TLDS,
 )
+from .dom_inspection import dom_inspection_manager
 
 # ---------------------------------------------------------------------------
 # Internal constants
@@ -71,6 +73,19 @@ _RISK_WEIGHTS: dict[str, int] = {
     'SANDBOX_HOMOGRAPH_DOMAIN':          25,
     'SANDBOX_HIGH_ENTROPY_URL':          10,
     'SANDBOX_DATA_URI_ABUSE':            20,
+    'EXFILTRATION_SINK_DETECTED':        50,
+    'CROSS_ORIGIN_CREDENTIAL_FORM':      35,
+    'RAW_IP_FORM_ACTION':                25,
+    'INSECURE_HTTP_CREDENTIAL_FORM':     35,
+    'EXCESSIVE_IDENTITY_HARVESTING':     30,
+    'REALTIME_OTP_HARVESTING_LURE':      25,
+    'CLICKJACKING_OVERLAY_TRAP':         25,
+    'WEB3_BLIND_SIGN_DRAINER':           40,
+    'WEB3_NFT_APPROVAL_DRAINER':         35,
+    'WEB3_PERMIT2_ALLOWANCE_DRAINER':    35,
+    'DANGEROUS_EXECUTABLE_DOWNLOAD':     40,
+    'DOUBLE_EXTENSION_DECEPTION':        45,
+    'AUTOMATED_DRIVE_BY_DOWNLOAD':       30,
 }
 
 # Security response headers we expect on trustworthy sites.
@@ -257,11 +272,124 @@ def _url_path_entropy(url: str) -> float | None:
     """
     parsed = urlparse(url)
     path_and_query = (parsed.path or '') + (parsed.query or '')
-    # Strip common low-entropy separators before measuring
     stripped = re.sub(r'[/?=&\-_.]', '', path_and_query)
     if len(stripped) < _MIN_ENTROPY_PATH_LEN:
         return None
     return _shannon_entropy(stripped)
+
+
+def audit_dom_forms(soup: BeautifulSoup, page_url: str, findings: list) -> dict:
+    """
+    Audits all HTML <form> tags for credential harvesting, cross-origin targets,
+    and exfiltration sinks (Telegram, Discord, Google Forms, Formspree, etc.).
+    """
+    parsed_page = urlparse(page_url)
+    page_host = (parsed_page.hostname or '').lower()
+    page_registered = tldextract.extract(page_host).registered_domain.lower() if page_host else ''
+
+    audited_forms: list[dict] = []
+    exfiltration_sinks: list[dict] = []
+
+    for form in soup.find_all('form'):
+        method = (form.get('method') or 'GET').upper()
+        action_raw = (form.get('action') or '').strip()
+        action_url = urljoin(page_url, action_raw) if action_raw else page_url
+        action_parsed = urlparse(action_url)
+        action_host = (action_parsed.hostname or '').lower()
+        action_registered = tldextract.extract(action_host).registered_domain.lower() if action_host else ''
+
+        inputs = form.find_all(['input', 'textarea', 'select'])
+        has_password = any((inp.get('type') or '').lower() == 'password' for inp in inputs)
+        sensitive_fields: list[str] = []
+
+        for inp in inputs:
+            inp_type = (inp.get('type') or '').lower()
+            inp_name = (inp.get('name') or '').lower()
+            inp_id = (inp.get('id') or '').lower()
+            field_ident = f"{inp_name} {inp_id}"
+
+            if inp_type == 'password':
+                sensitive_fields.append('password')
+            elif any(k in field_ident for k in ('cvv', 'cvc', 'card', 'creditcard', 'expir')):
+                sensitive_fields.append('payment_card')
+            elif any(k in field_ident for k in ('ssn', 'socialsecurity', 'social_security')):
+                sensitive_fields.append('ssn')
+            elif any(k in field_ident for k in ('pin', 'passcode', 'otp', '2fa', 'token')):
+                sensitive_fields.append('otp_pin')
+
+        is_cross_origin = bool(page_registered and action_registered and page_registered != action_registered)
+        is_raw_ip = is_ip_host(action_host) or is_ip_like_host(action_host)
+        is_sink = False
+        sink_type = None
+
+        # Check exfiltration sink patterns
+        for pattern, label in EXFILTRATION_SINK_PATTERNS:
+            if re.search(pattern, action_url, re.IGNORECASE):
+                is_sink = True
+                sink_type = label
+                break
+
+        form_meta = {
+            'action': action_url,
+            'method': method,
+            'hasPasswordField': has_password,
+            'sensitiveFields': list(set(sensitive_fields)),
+            'isCrossOrigin': is_cross_origin,
+            'isRawIp': is_raw_ip,
+            'isExfiltrationSink': is_sink,
+            'sinkType': sink_type,
+        }
+        audited_forms.append(form_meta)
+
+        if is_sink:
+            exfiltration_sinks.append(form_meta)
+            findings.append({
+                'type': 'EXFILTRATION_SINK_DETECTED',
+                'flagged': True,
+                'explanation': (
+                    f"CRITICAL: Form submits data directly to known exfiltration sink '{sink_type}' "
+                    f"at '{action_url}'. Attackers use this to silently exfiltrate stolen credentials."
+                ),
+            })
+
+        if is_raw_ip:
+            findings.append({
+                'type': 'RAW_IP_FORM_ACTION',
+                'flagged': True,
+                'explanation': f"Form submits data to a raw IP address '{action_host}', bypassing DNS domain controls.",
+            })
+
+        if is_cross_origin and (has_password or sensitive_fields):
+            findings.append({
+                'type': 'CROSS_ORIGIN_CREDENTIAL_FORM',
+                'flagged': True,
+                'explanation': (
+                    f"Form collecting credentials submits across origins from '{page_host}' to '{action_host}'. "
+                    'Legitimate platforms almost never submit user passwords to foreign external domains.'
+                ),
+            })
+
+    # External assets extraction
+    external_assets: list[str] = []
+    external_domains: set[str] = set()
+
+    for tag in soup.find_all(['script', 'iframe', 'a', 'link', 'img']):
+        src = tag.get('src') or tag.get('href') or ''
+        if src and not src.startswith(('data:', 'javascript:', '#')):
+            full_asset = urljoin(page_url, src)
+            h = (urlparse(full_asset).hostname or '').lower()
+            if h and page_registered:
+                asset_reg = tldextract.extract(h).registered_domain.lower()
+                if asset_reg and asset_reg != page_registered:
+                    external_assets.append(full_asset)
+                    external_domains.add(asset_reg)
+
+    return {
+        'forms': audited_forms,
+        'exfiltrationSinks': exfiltration_sinks,
+        'externalAssetCount': len(external_assets),
+        'externalAssetDomains': sorted(list(external_domains)),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +515,35 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
             'redirectIssues': [],
             'urlEntropyScore': url_entropy,
             'riskScore': risk_score,
+            'linkXRay': {
+                'forms': [],
+                'externalAssetCount': 0,
+                'hiddenIframesCount': 0,
+                'exfiltrationSinksDetected': [],
+            },
+            'payloadInspection': {
+                'credentialHarvester': {
+                    'isHttpLogin': False,
+                    'hasPasswordInput': False,
+                    'sensitiveInputsFound': [],
+                },
+                'clickjacking': {
+                    'hasClickjackingOverlays': False,
+                    'overlayCount': 0,
+                    'overlays': [],
+                },
+                'web3Drainer': {
+                    'hasWeb3DrainerSignatures': False,
+                    'detectedSignatures': [],
+                },
+                'driveByDownload': {
+                    'isExecutableDownload': False,
+                    'isDoubleExtension': False,
+                    'downloadFilename': None,
+                    'contentType': '',
+                    'autoDownloadAnchors': [],
+                },
+            },
         }
 
     # ------------------------------------------------------------------
@@ -475,9 +632,11 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
         })
 
     # ------------------------------------------------------------------
-    # 9. Fake login form detection (enhanced)
+    # 9. Form Action & Link X-Ray Audit (Sub-Pillar 1.3)
     # ------------------------------------------------------------------
+    dom_audit = audit_dom_forms(soup, response.url, findings)
     fake_login_forms: list[dict] = []
+
     for form in soup.find_all('form'):
         inputs = form.find_all('input')
         has_password = any((inp.get('type') or '').lower() == 'password' for inp in inputs)
@@ -497,11 +656,9 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
         if page_host and action_host and page_host != action_host:
             reasons.append('submits credentials to a different domain')
 
-        # NEW: action points to a data: URI
         if action_raw.lower().startswith('data:'):
             reasons.append('form action is a data: URI — credentials would be captured inline')
 
-        # NEW: autocomplete disabled (hides from password managers — phishing signal)
         autocomplete = (form.get('autocomplete') or '').lower()
         if autocomplete == 'off':
             reasons.append('autocomplete disabled on credential form (hides from password managers)')
@@ -510,10 +667,16 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
         if any(kw in form_text for kw in SANDBOX_KEYWORDS):
             reasons.append('uses urgent verification language near credential fields')
 
+        # Check for exfiltration sinks
+        for pattern, label in EXFILTRATION_SINK_PATTERNS:
+            if re.search(pattern, action_url, re.IGNORECASE):
+                reasons.append(f"exfiltrates credentials to known sink '{label}'")
+                break
+
         if reasons:
             fake_login_forms.append({'actionUrl': action_url, 'reasons': reasons})
 
-    if fake_login_forms:
+    if fake_login_forms and not any(f.get('type') == 'EXFILTRATION_SINK_DETECTED' for f in findings):
         findings.append({
             'type': 'SANDBOX_FAKE_LOGIN_FORM_SIGNAL',
             'flagged': True,
@@ -630,7 +793,18 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
         })
 
     # ------------------------------------------------------------------
-    # 14. Aggregate risk score
+    # 14. Deep DOM & Payload Inspection (Pillar 5)
+    # ------------------------------------------------------------------
+    payload_inspection = dom_inspection_manager.evaluate(
+        soup=soup,
+        response_headers=dict(response.headers) if response else {},
+        page_url=response.url,
+        registered_domain=page_registered,
+        findings=findings,
+    )
+
+    # ------------------------------------------------------------------
+    # 15. Aggregate risk score
     # ------------------------------------------------------------------
     risk_score = _compute_risk_score(findings)
 
@@ -650,6 +824,13 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
         'redirectIssues': redirect_issues,
         'urlEntropyScore': url_entropy,
         'riskScore': risk_score,
+        'linkXRay': {
+            'forms': dom_audit['forms'],
+            'externalAssetCount': dom_audit['externalAssetCount'],
+            'hiddenIframesCount': len(hidden_iframes),
+            'exfiltrationSinksDetected': dom_audit['exfiltrationSinks'],
+        },
+        'payloadInspection': payload_inspection,
     }
 
 

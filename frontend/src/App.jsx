@@ -1,40 +1,46 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
-  LuShield,
-  LuShieldCheck,
-  LuShieldAlert,
-  LuShieldX,
-  LuSearch,
-  LuLink,
-  LuExternalLink,
-  LuCopy,
-  LuCheck,
-  LuX,
-  LuClipboard,
-  LuChevronDown,
-  LuInfo,
-  LuArrowDown,
-  LuCalendar,
-  LuNetwork,
-  LuCode,
-  LuSun,
-  LuMoon,
-  LuGlobe,
-  LuTriangleAlert,
-  LuCircleAlert,
-  LuCircleCheck,
-  LuCircleX,
-  LuEyeOff,
-  LuKey,
-  LuFileCode,
-  LuRefreshCw,
-  LuLock,
-  LuLockOpen,
-  LuFileText,
-  LuActivity,
-} from 'react-icons/lu'
+  Shield,
+  ShieldCheck,
+  ShieldWarning,
+  ShieldSlash,
+  MagnifyingGlass,
+  Link as LinkIcon,
+  ArrowSquareOut,
+  Copy,
+  Check,
+  X,
+  ClipboardText,
+  CaretDown,
+  Info,
+  ArrowDown,
+  CalendarBlank,
+  ShareNetwork,
+  Code,
+  FileCode,
+  Eye,
+  FileText,
+  Pulse,
+  Lock,
+  LockOpen,
+  Warning,
+  WarningCircle,
+  CheckCircle,
+  XCircle,
+  Globe,
+  Database,
+  DownloadSimple,
+  TerminalWindow,
+} from '@phosphor-icons/react'
 
 import './App.css'
+import { ThemeSwitch } from './components/ThemeSwitch'
+import { LinkDissector } from './components/LinkDissector'
+import { InteractivePipelineDemo } from './components/InteractivePipelineDemo'
+import { SafePreviewModal } from './components/SafePreviewModal'
+import { ReportExportModal } from './components/ReportExportModal'
+import { DeveloperPortal } from './views/DeveloperPortal'
+import { defangUrl } from './utils/stixGenerator'
 
 // ─── Stage Metadata for Multi-Stage Progress Scanner ─────────────────────────
 const STAGES = [
@@ -42,59 +48,58 @@ const STAGES = [
     key: 'validating',
     label: 'Validating URL',
     detail: 'Sanitising address format, stripping tracking parameters, and resolving host protocols.',
-    icon: <LuSearch />,
+    icon: <MagnifyingGlass size={16} weight="bold" />,
   },
   {
     key: 'safe_browsing',
-    label: 'Google Safe Browsing',
+    label: 'Multi-Engine Threat Feeds',
     detail: 'Querying global databases for known malware distributions, phishing vectors, and malicious feeds.',
-    icon: <LuShield />,
+    icon: <Shield size={16} weight="bold" />,
   },
   {
     key: 'structure',
-    label: 'Structure Analysis',
-    detail: 'Inspecting hostname entropy, IP-based routing, suspicious TLDs, and typosquatting impersonation.',
-    icon: <LuNetwork />,
+    label: 'Structure & Homographs',
+    detail: 'Inspecting hostname entropy, IP-based routing, Unicode confusables, and typosquatting impersonation.',
+    icon: <ShareNetwork size={16} weight="bold" />,
   },
   {
-    key: 'domain_age',
-    label: 'Domain Age & WHOIS',
-    detail: 'Querying registrar records for registration velocity; newly minted domains carry significantly higher risk.',
-    icon: <LuCalendar />,
+    key: 'infrastructure',
+    label: 'Infrastructure & DNS',
+    detail: 'Querying Bulletproof ASNs, Fast-Flux nameserver volatility, and TLS certificate issuance recency.',
+    icon: <Database size={16} weight="bold" />,
   },
   {
     key: 'redirect',
     label: 'Redirect Chain',
     detail: 'Tracing HTTP redirect hops, resolving obfuscated shorteners, and identifying protocol downgrades.',
-    icon: <LuActivity />,
+    icon: <Pulse size={16} weight="bold" />,
   },
   {
     key: 'sandbox',
-    label: 'Sandbox Passive Preview',
-    detail: 'Safely parsing DOM markup without executing JavaScript to detect credential harvesting forms and exfiltration scripts.',
-    icon: <LuCode />,
+    label: 'DOM & Web3 Sandbox',
+    detail: 'Auditing forms, Permit2 crypto signatures, Telegram exfiltration sinks, and drive-by download traps.',
+    icon: <Code size={16} weight="bold" />,
   },
 ]
 
-// Map backend stage strings to our stage keys
 function stageKeyFromLabel(label) {
   if (!label) return null
   const l = label.toLowerCase()
   if (l.includes('validat')) return 'validating'
-  if (l.includes('safe browsing') || l.includes('google')) return 'safe_browsing'
-  if (l.includes('structure')) return 'structure'
-  if (l.includes('domain age') || l.includes('whois')) return 'domain_age'
+  if (l.includes('safe browsing') || l.includes('google') || l.includes('threat')) return 'safe_browsing'
+  if (l.includes('structure') || l.includes('homograph')) return 'structure'
+  if (l.includes('domain age') || l.includes('whois') || l.includes('infrastruct') || l.includes('dns')) return 'infrastructure'
   if (l.includes('redirect')) return 'redirect'
-  if (l.includes('sandbox') || l.includes('preview')) return 'sandbox'
+  if (l.includes('sandbox') || l.includes('preview') || l.includes('dom')) return 'sandbox'
   return null
 }
 
 // ─── Precision Risk Gauge Component ──────────────────────────────────────────
 function RiskGauge({ score }) {
   const safeScore = Math.max(0, Math.min(100, score ?? 0))
-  const color = safeScore >= 60 ? 'var(--danger-accent)' : safeScore >= 30 ? 'var(--warn-accent)' : 'var(--safe-accent)'
+  const color = safeScore >= 60 ? 'var(--risk-danger-accent)' : safeScore >= 30 ? 'var(--risk-warn-accent)' : 'var(--risk-safe-accent)'
   const label = safeScore >= 60 ? 'High Risk' : safeScore >= 30 ? 'Medium Risk' : 'Low Risk'
-  
+
   const r = 38
   const cx = 48
   const cy = 48
@@ -104,23 +109,21 @@ function RiskGauge({ score }) {
   return (
     <div className="risk-gauge-dial">
       <svg viewBox="0 0 96 54" width="124" aria-label={`Risk gauge showing ${safeScore}/100`}>
-        {/* Track */}
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
           fill="none"
-          stroke="var(--border-card)"
-          strokeWidth="8"
+          stroke="var(--border-muted)"
+          strokeWidth="7"
           strokeLinecap="round"
         />
-        {/* Gauge Arc */}
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
           fill="none"
           stroke={color}
-          strokeWidth="8"
+          strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={`${filled} ${circ}`}
-          style={{ transition: 'stroke-dasharray 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }}
+          style={{ transition: 'stroke-dasharray 0.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
         />
       </svg>
       <div className="gauge-caption">
@@ -162,11 +165,11 @@ function ProgressBar({ currentStageLabel }) {
           return (
             <div
               key={s.key}
-              className={`stepper-node ${isDone ? 'done' : ''} ${isActive ? 'active' : ''} ${!isDone && !isActive ? 'pending' : ''}`}
+              className={`stepper-node ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}
               title={`${s.label}: ${s.detail}`}
             >
               <span className="step-marker-icon">
-                {isDone ? <LuCircleCheck /> : isActive ? <LuActivity /> : <span style={{ fontSize: '0.65rem' }}>{idx + 1}</span>}
+                {isDone ? <CheckCircle size={14} weight="bold" /> : isActive ? <Pulse size={14} weight="bold" /> : <span style={{ fontSize: '0.65rem' }}>{idx + 1}</span>}
               </span>
               <span className="step-node-name">{s.label}</span>
             </div>
@@ -193,12 +196,12 @@ function CollapsibleSection({ title, icon, flaggedCount, defaultOpen = false, ch
           <span className="accordion-section-label">{title}</span>
           {flaggedCount > 0 && (
             <span className="section-flag-badge">
-              <LuCircleAlert /> {flaggedCount} {flaggedCount === 1 ? 'flag' : 'flags'}
+              <WarningCircle size={12} weight="bold" /> {flaggedCount} {flaggedCount === 1 ? 'flag' : 'flags'}
             </span>
           )}
         </div>
         <span className={`accordion-chevron-box ${open ? 'open' : ''}`}>
-          <LuChevronDown />
+          <CaretDown size={14} weight="bold" />
         </span>
       </button>
       {open && <div className="accordion-body-container">{children}</div>}
@@ -221,17 +224,17 @@ function InfoModal({ onClose }) {
       <div className="modal-dialog" onClick={e => e.stopPropagation()}>
         <div className="modal-header-section">
           <div className="modal-title-lockup">
-            <LuShield style={{ color: 'var(--c-400)', fontSize: '1.4rem' }} />
-            <h2 id="modal-title">How ZEB Inspects Links</h2>
+            <Shield size={20} weight="bold" />
+            <h2 id="modal-title" className="modal-heading-text">How ZEB Inspects Links</h2>
           </div>
-          <button type="button" className="modal-close-icon-btn" onClick={onClose} aria-label="Close modal">
-            <LuX />
+          <button type="button" className="mech-btn modal-close-btn" onClick={onClose} aria-label="Close modal">
+            <X size={16} weight="bold" />
           </button>
         </div>
 
         <div className="modal-body-section">
           <p className="modal-lead-paragraph">
-            ZEB employs a multi-tiered security pipeline combining real-time commercial threat intelligence with passive heuristic and content analysis. Each engine evaluates distinct attack surfaces before rendering a consolidated verdict.
+            ZEB employs a multi-tiered security pipeline combining real-time commercial threat feeds with passive heuristic and network analysis. Each engine evaluates distinct attack surfaces before rendering a consolidated verdict.
           </p>
 
           <div className="engine-check-grid">
@@ -247,7 +250,7 @@ function InfoModal({ onClose }) {
           </div>
 
           <div className="modal-safety-notice">
-            <strong>Passive Sandbox Guarantee:</strong> ZEB fetches DOM markup in a sandboxed parser without executing client-side scripts, keeping your machine insulated from drive-by downloads or zero-day browser exploits.
+            <strong>Passive Sandbox Guarantee:</strong> ZEB evaluates URLs and DOM markup in isolated cloud containers without executing untrusted scripts on your workstation, keeping your browser insulated from zero-day exploits.
           </div>
         </div>
       </div>
@@ -256,22 +259,26 @@ function InfoModal({ onClose }) {
 }
 
 // ─── Results Presentation Component ──────────────────────────────────────────
-function ResultsView({ result, onReset }) {
+function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport }) {
   const [copiedKey, setCopiedKey] = useState(null)
   const { url, verdict, message, threats, structureAnalysis } = result
   const sa = structureAnalysis || {}
   const redirect = sa.redirectAnalysis || {}
-  const sandbox = sa.sandboxPreview || null
+  const sandbox = sa.sandboxPreview || {}
+  const infra = sa.infrastructureAnalysis || {}
+  const domThreats = sandbox.domThreats || {}
+  const web3 = domThreats.web3Signatures || {}
+  const payloads = domThreats.payloadDownloads || {}
+  const credHarvester = domThreats.credentialHarvesters || {}
+  const visual = sandbox.visualMatching || {}
 
   const isSafe = verdict === 'SAFE'
   const isUnsafe = verdict === 'UNSAFE'
-  const isUnsure = !isSafe && !isUnsafe
 
   const flaggedFindingsCount = sa.findings?.filter(f => f.flagged).length || 0
   const hasShortener = redirect.passedThroughShortener || redirect.hops?.some(h => h.isShortener)
   const hopCount = redirect.hopCount ?? (redirect.hops?.length || 0)
 
-  // Copy helper
   function handleCopy(text, key) {
     if (!text) return
     navigator.clipboard.writeText(text)
@@ -279,47 +286,36 @@ function ResultsView({ result, onReset }) {
     setTimeout(() => setCopiedKey(null), 2000)
   }
 
-  // Generate full markdown report for export
-  function copyFullReport() {
-    const report = [
-      `# ZEB URL Security Report`,
-      `• Target URL: ${url}`,
-      `• Verdict: ${verdict}`,
-      `• Summary: ${message}`,
-      `• Hostname: ${sa.hostname || 'N/A'}`,
-      `• Registered Domain: ${sa.registeredDomainFull || 'N/A'}`,
-      `• Domain Age: ${sa.domainAge?.available ? `${sa.domainAge.domainAgeDays} days` : 'Unknown'}`,
-      `• Redirect Hops: ${hopCount}`,
-      `• Final Destination: ${redirect.finalUrl || url}`,
-      `• Sandbox Risk Score: ${sandbox?.riskScore ?? 'N/A'}/100`,
-      threats?.length > 0 ? `• Threats Detected: ${threats.map(t => t.threatType).join(', ')}` : '• Threats: None detected via Google Safe Browsing',
-    ].join('\n')
-    handleCopy(report, 'full-report')
-  }
-
   return (
-    <div className={`results-shell ${isSafe ? 'status-safe' : isUnsafe ? 'status-unsafe' : isUnsure ? 'status-unsure' : ''}`}>
+    <div className={`results-shell ${isSafe ? 'status-safe' : isUnsafe ? 'status-unsafe' : 'status-unsure'}`}>
+      {/* Pillar 6.1: Interactive Link Dissector */}
+      <LinkDissector url={url} structureAnalysis={structureAnalysis} />
+
       {/* Top Verdict Hero */}
       <div className="verdict-hero">
         <div className="verdict-header-row">
-          <div className={`verdict-badge-prominent ${isSafe ? 'badge-prominent-safe' : isUnsafe ? 'badge-prominent-unsafe' : isUnsure ? 'badge-prominent-unsure' : ''}`}>
-            {isSafe ? <LuShieldCheck /> : isUnsafe ? <LuShieldX /> : <LuShieldAlert />}
+          <div className={`verdict-badge-prominent ${isSafe ? 'badge-prominent-safe' : isUnsafe ? 'badge-prominent-unsafe' : 'badge-prominent-unsure'}`}>
+            {isSafe ? <ShieldCheck size={20} weight="bold" /> : isUnsafe ? <ShieldSlash size={20} weight="bold" /> : <ShieldWarning size={20} weight="bold" />}
             <span>VERDICT: {verdict}</span>
           </div>
 
           <div className="quick-stats-strip">
             <span className="quick-stat-item">
-              <LuGlobe style={{ marginRight: 4 }} />
+              <Globe size={13} weight="bold" />
               {sa.hostname || 'Domain'}
             </span>
             <span className="quick-stat-item">
-              <LuActivity style={{ marginRight: 4 }} />
+              <Pulse size={13} weight="bold" />
               {hopCount} {hopCount === 1 ? 'Hop' : 'Hops'}
             </span>
-            {sandbox?.available && (
-              <span className="quick-stat-item">
-                <LuCode style={{ marginRight: 4 }} />
-                Score: {sandbox.riskScore ?? 0}/100
+            <span className="quick-stat-item">
+              <Code size={13} weight="bold" />
+              Risk: {sandbox.riskScore ?? 0}/100
+            </span>
+            {infra.asnInfo && (
+              <span className={`quick-stat-item ${infra.asnInfo.isHighAbuse ? 'val-danger' : ''}`}>
+                <Database size={13} weight="bold" />
+                AS{infra.asnInfo.asn}
               </span>
             )}
           </div>
@@ -334,20 +330,44 @@ function ResultsView({ result, onReset }) {
           <div className="url-action-btns">
             <button
               type="button"
+              className={`copy-mini-btn ${copiedKey === 'defang' ? 'copied' : ''}`}
+              onClick={() => handleCopy(defangUrl(url), 'defang')}
+              title="Copy defanged link (safe for Slack/Teams)"
+            >
+              {copiedKey === 'defang' ? <><Check size={12} weight="bold" /> Copied Defanged</> : <><Copy size={12} weight="bold" /> Defang URL</>}
+            </button>
+            <button
+              type="button"
               className={`copy-mini-btn ${copiedKey === 'target-url' ? 'copied' : ''}`}
               onClick={() => handleCopy(url, 'target-url')}
               aria-label="Copy inspected URL"
             >
-              {copiedKey === 'target-url' ? <><LuCheck /> Copied</> : <><LuCopy /> Copy URL</>}
+              {copiedKey === 'target-url' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy</>}
+            </button>
+            <button
+              type="button"
+              className="copy-mini-btn"
+              onClick={onOpenSafePreview}
+              title="Inspect page in isolated cloud sandbox"
+            >
+              <Eye size={12} weight="bold" /> Safe Preview
+            </button>
+            <button
+              type="button"
+              className="copy-mini-btn"
+              onClick={onOpenExportReport}
+              title="Export Incident Report (Markdown, Defanged, STIX 2.1)"
+            >
+              <DownloadSimple size={12} weight="bold" /> Export Report
             </button>
             <a
               href={url}
               target="_blank"
               rel="noopener noreferrer nofollow"
               className="copy-mini-btn"
-              title="Open URL in separate tab (Caution)"
+              title="Open URL in separate browser tab (Caution)"
             >
-              <LuExternalLink /> Visit
+              <ArrowSquareOut size={12} weight="bold" /> Visit
             </a>
           </div>
         </div>
@@ -355,24 +375,100 @@ function ResultsView({ result, onReset }) {
         <p className="verdict-explanation-msg">{message}</p>
       </div>
 
-      {/* Google Safe Browsing Threats Banner (if present) */}
+      {/* Visual Brand Impersonation Alert */}
+      {visual.detected && (
+        <div className="threat-module">
+          <div className="threat-module-title">
+            <Warning size={16} weight="bold" />
+            <span>Visual Brand Impersonation Detected</span>
+          </div>
+          <div className="threat-record">
+            <div className="threat-record-header">
+              <span className="threat-badge">VISUAL CLONE</span>
+              <span className="threat-platform">Targeted Brand: {visual.brand}</span>
+            </div>
+            <p className="threat-explanation">
+              Page layout displays {Math.round((visual.similarityScore || 0) * 100)}% visual similarity to official {visual.brand} login portals, indicating an active phishing credential harvester.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Web3 Wallet Drainer Alert */}
+      {web3.hasWeb3Drainer && (
+        <div className="threat-module">
+          <div className="threat-module-title">
+            <ShieldSlash size={16} weight="bold" />
+            <span>Web3 Crypto Drainer Signatures Detected</span>
+          </div>
+          <div className="threat-record">
+            <div className="threat-record-header">
+              <span className="threat-badge">WALLET THEFT</span>
+              <span className="threat-platform">Signature: {web3.detectedPatterns?.join(', ')}</span>
+            </div>
+            <p className="threat-explanation">
+              Embedded scripts execute malicious Permit2 / eth_sign approvals to drain connected Ethereum/EVM wallets without user awareness.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Malicious Download Alert */}
+      {payloads.isMaliciousDownload && (
+        <div className="threat-module">
+          <div className="threat-module-title">
+            <Warning size={16} weight="bold" />
+            <span>Drive-by Download / Malicious Payload Trap</span>
+          </div>
+          <div className="threat-record">
+            <div className="threat-record-header">
+              <span className="threat-badge">DANGEROUS PAYLOAD</span>
+              <span className="threat-platform">Signals: {payloads.flags?.join(', ')}</span>
+            </div>
+            <p className="threat-explanation">
+              Direct download or double extension trap (.pdf.exe) detected in server response headers or markup.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Bulletproof Host Alert */}
+      {infra.asnInfo?.isHighAbuse && (
+        <div className="threat-module">
+          <div className="threat-module-title">
+            <Database size={16} weight="bold" />
+            <span>Bulletproof Hosting Infrastructure Identified</span>
+          </div>
+          <div className="threat-record">
+            <div className="threat-record-header">
+              <span className="threat-badge">BULLETPROOF ASN</span>
+              <span className="threat-platform">AS{infra.asnInfo.asn} ({infra.asnInfo.org})</span>
+            </div>
+            <p className="threat-explanation">
+              Host resides within an Autonomous System known for ignoring DMCA takedowns and harboring criminal cyber-infrastructure.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Engine Threats Banner */}
       {threats?.length > 0 && (
         <div className="threat-module">
           <div className="threat-module-title">
-            <LuTriangleAlert />
-            <span>Google Safe Browsing Threats Identified</span>
+            <Warning size={16} weight="bold" />
+            <span>Multi-Engine Threat Intelligence Matches</span>
           </div>
           {threats.map((t, idx) => (
             <div key={idx} className="threat-record">
               <div className="threat-record-header">
                 <span className="threat-badge">{t.threatType}</span>
-                <span className="threat-platform">Platform: {t.platformType}</span>
+                <span className="threat-platform">Engine: {t.engine || 'Google Safe Browsing'} | Platform: {t.platformType}</span>
               </div>
               <p className="threat-explanation">
-                {t.threatType === 'MALWARE' && 'Confirmed host for malware distribution capable of damaging hardware or extracting sensitive credentials.'}
-                {t.threatType === 'SOCIAL_ENGINEERING' && 'Deceptive phishing surface impersonating trusted entities to harvest login credentials or payment data.'}
+                {t.threatType === 'MALWARE' && 'Confirmed host for malware distribution capable of damaging systems or extracting credentials.'}
+                {t.threatType === 'SOCIAL_ENGINEERING' && 'Deceptive phishing surface impersonating trusted entities to harvest login credentials.'}
                 {t.threatType === 'UNWANTED_SOFTWARE' && 'Distributes unwanted toolbars, adware, or background crypto-mining software.'}
-                {!['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE'].includes(t.threatType) && 'Matches verified malicious pattern in Google threat databases.'}
+                {!['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE'].includes(t.threatType) && 'Matches verified malicious pattern in security databases.'}
               </p>
             </div>
           ))}
@@ -383,11 +479,11 @@ function ResultsView({ result, onReset }) {
       {hasShortener && (
         <div className="shortener-pipeline-card">
           <div className="pipeline-header">
-            <LuNetwork />
+            <ShareNetwork size={16} weight="bold" />
             <span>Obfuscated Shortener Chain Detected</span>
           </div>
           <p className="pipeline-desc">
-            This URL passes through a shortening gateway to mask its final destination. ZEB navigated the redirect chain to expose the terminal endpoint.
+            This URL passes through a shortening gateway to mask its final destination. ZEB traversed the redirect hops to expose the terminal endpoint.
           </p>
 
           <div className="pipeline-chain">
@@ -399,7 +495,7 @@ function ResultsView({ result, onReset }) {
             </div>
 
             <div className="chain-arrow-separator">
-              <LuArrowDown />
+              <ArrowDown size={14} weight="bold" />
             </div>
 
             {redirect.hops?.filter(h => h.isShortener).map((hop, i) => (
@@ -411,14 +507,14 @@ function ResultsView({ result, onReset }) {
                   </div>
                 </div>
                 <div className="chain-arrow-separator">
-                  <LuArrowDown />
+                  <ArrowDown size={14} weight="bold" />
                 </div>
               </div>
             ))}
 
             <div className="chain-hop-box destination">
               <div className="chain-hop-meta">
-                <span className="chain-hop-tag" style={{ color: 'var(--safe-text)' }}>Resolved Final Destination</span>
+                <span className="chain-hop-tag" style={{ color: 'var(--risk-safe-text)' }}>Resolved Final Destination</span>
                 <code className="chain-hop-url">{redirect.finalUrl || url}</code>
               </div>
               <button
@@ -427,7 +523,7 @@ function ResultsView({ result, onReset }) {
                 onClick={() => handleCopy(redirect.finalUrl || url, 'final-url')}
                 aria-label="Copy resolved destination URL"
               >
-                {copiedKey === 'final-url' ? <><LuCheck /> Copied</> : <><LuCopy /> Copy Destination</>}
+                {copiedKey === 'final-url' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy Destination</>}
               </button>
             </div>
           </div>
@@ -439,7 +535,7 @@ function ResultsView({ result, onReset }) {
         {/* Section 1: Domain Architecture */}
         <CollapsibleSection
           title="URL & Domain Architecture"
-          icon={<LuGlobe />}
+          icon={<Globe size={16} weight="bold" />}
           flaggedCount={flaggedFindingsCount}
           defaultOpen={true}
         >
@@ -476,12 +572,11 @@ function ResultsView({ result, onReset }) {
             </div>
           </div>
 
-          {/* Structural findings */}
           <div className="findings-stream">
             {sa.findings?.map((f, i) => (
               <div key={i} className={`finding-row ${f.flagged ? 'flagged' : 'clean'}`}>
                 <span className="finding-dot">
-                  {f.flagged ? <LuCircleAlert /> : <LuCircleCheck />}
+                  {f.flagged ? <WarningCircle size={14} weight="bold" /> : <CheckCircle size={14} weight="bold" />}
                 </span>
                 <span className="finding-desc">{f.explanation}</span>
               </div>
@@ -489,61 +584,66 @@ function ResultsView({ result, onReset }) {
           </div>
         </CollapsibleSection>
 
-        {/* Section 2: Redirect Chain */}
+        {/* Section 2: Infrastructure & Network Security */}
         <CollapsibleSection
-          title="Redirect Chain & Protocol Integrity"
-          icon={<LuNetwork />}
-          flaggedCount={redirect.tooManyRedirects || redirect.hops?.some(h => h.suspicious) ? 1 : 0}
+          title="Infrastructure, Network & DNS Audit"
+          icon={<Database size={16} weight="bold" />}
+          flaggedCount={infra.asnInfo?.isHighAbuse || infra.dnsAudit?.fastFluxDetected || infra.sslAudit?.isVeryRecent ? 1 : 0}
           defaultOpen={false}
         >
-          {redirect.tooManyRedirects && (
-            <div className="finding-row flagged" style={{ marginBottom: 12 }}>
-              <span className="finding-dot"><LuCircleAlert /></span>
-              <span className="finding-desc">
-                Excessive redirect count ({redirect.hopCount} hops). Often employed by cloaking networks to evade automated inspection.
+          <div className="metric-tiles-grid">
+            <div className="metric-tile">
+              <span className="metric-tile-label">Resolved IP</span>
+              <span className="metric-tile-value">{infra.resolvedIp || 'N/A'}</span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">Autonomous System</span>
+              <span className="metric-tile-value">
+                {infra.asnInfo ? `AS${infra.asnInfo.asn}` : 'N/A'}
               </span>
             </div>
-          )}
-
-          {redirect.hops && redirect.hops.length > 0 ? (
-            <div className="hops-stream">
-              {redirect.hops.map((hop, i) => (
-                <div key={i} className={`hop-card ${hop.suspicious ? 'hop-warn' : ''}`}>
-                  <span className="hop-index-badge">{i + 1}</span>
-                  <div className="hop-content">
-                    <code className="hop-url-text">{hop.url}</code>
-                    <div className="hop-tags-cluster">
-                      {hop.statusCode && <span className="meta-chip">HTTP {hop.statusCode}</span>}
-                      {hop.crossOrigin && <span className="meta-chip chip-warn">Cross-Origin</span>}
-                      {hop.isShortener && <span className="meta-chip chip-info">Shortener</span>}
-                      {hop.schemeDowngrade && <span className="meta-chip chip-bad">HTTPS → HTTP Downgrade</span>}
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="metric-tile">
+              <span className="metric-tile-label">Hosting Provider</span>
+              <span className="metric-tile-value" title={infra.asnInfo?.org}>
+                {infra.asnInfo?.org || 'N/A'}
+              </span>
             </div>
-          ) : (
-            <p className="finding-desc" style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-              Direct destination reached with zero intermediate redirects.
-            </p>
-          )}
+            <div className="metric-tile">
+              <span className="metric-tile-label">Bulletproof Status</span>
+              <span className={`metric-tile-value ${infra.asnInfo?.isHighAbuse ? 'val-danger' : 'val-safe'}`}>
+                {infra.asnInfo?.isHighAbuse ? 'High Abuse Host' : 'Standard Host'}
+              </span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">Fast-Flux DNS</span>
+              <span className={`metric-tile-value ${infra.dnsAudit?.fastFluxDetected ? 'val-danger' : 'val-safe'}`}>
+                {infra.dnsAudit?.fastFluxDetected ? 'Detected' : 'Normal'}
+              </span>
+            </div>
+            <div className="metric-tile">
+              <span className="metric-tile-label">SSL Cert Recency</span>
+              <span className={`metric-tile-value ${infra.sslAudit?.isVeryRecent ? 'val-danger' : 'val-safe'}`}>
+                {infra.sslAudit?.ageDays !== undefined ? `${infra.sslAudit.ageDays} days old` : 'Unknown'}
+              </span>
+            </div>
+          </div>
         </CollapsibleSection>
 
-        {/* Section 3: Passive Sandbox Preview */}
+        {/* Section 3: Deep DOM, Form Actions & Payloads */}
         <CollapsibleSection
-          title="Passive Sandbox & Content Scan"
-          icon={<LuCode />}
-          flaggedCount={sandbox?.riskScore >= 25 ? 1 : 0}
-          defaultOpen={sandbox?.riskScore >= 25}
+          title="Deep DOM, Form Action & Payload Inspection"
+          icon={<Code size={16} weight="bold" />}
+          flaggedCount={sandbox.riskScore >= 25 ? 1 : 0}
+          defaultOpen={sandbox.riskScore >= 25}
         >
-          {sandbox?.available ? (
+          {sandbox.available ? (
             <div>
               <div className="sandbox-hero-cluster">
                 <RiskGauge score={sandbox.riskScore ?? 0} />
                 <div className="sandbox-hero-explain">
                   <strong>Static Heuristic Risk Metric</strong>
                   <p>
-                    Evaluated passively across HTML markup, metadata tags, and form actions. Higher values signal aggressive credential-harvesting indicators or obfuscated evasion scripts.
+                    Passively evaluated across HTML markup, metadata tags, and form actions. Higher values signal aggressive credential-harvesting indicators or obfuscated evasion scripts.
                   </p>
                 </div>
               </div>
@@ -551,7 +651,7 @@ function ResultsView({ result, onReset }) {
               {sandbox.matchedKeywords?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <LuKey /> Phishing Keywords Found
+                    <FileText size={14} weight="bold" /> Phishing Keywords Found
                   </div>
                   <p className="sandbox-group-subtitle">Urgency pressure keywords frequently associated with unauthorized password resets or billing fraud.</p>
                   <div className="chips-cloud">
@@ -565,41 +665,27 @@ function ResultsView({ result, onReset }) {
               {sandbox.fakeLoginForms?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <LuFileCode /> Suspicious Form Actions
+                    <FileCode size={14} weight="bold" /> Suspicious Form Actions
                   </div>
                   <p className="sandbox-group-subtitle">Credential-accepting form fields submitting payloads to foreign or unusual endpoints.</p>
                   {sandbox.fakeLoginForms.map((f, i) => (
                     <div key={i} className="code-box-display">
                       <span>Action: {f.action || 'Unknown'}</span>
-                      {f.hasPasswordField && <span style={{ marginLeft: 10, color: 'var(--danger-text)' }}>[Password Input Detected]</span>}
+                      {f.hasPasswordField && <span style={{ marginLeft: 10, color: 'var(--risk-danger-text)' }}>[Password Input Detected]</span>}
                     </div>
                   ))}
                 </div>
               )}
 
-              {sandbox.suspiciousScripts?.length > 0 && (
+              {credHarvester.hiddenOverlays?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <LuCircleAlert /> Obfuscated Scripts
+                    <Eye size={14} weight="bold" /> Clickjacking Hidden Overlays
                   </div>
-                  <p className="sandbox-group-subtitle">Script blocks matching known hex-encoding or evaluation wrappers.</p>
-                  {sandbox.suspiciousScripts.map((s, i) => (
+                  <p className="sandbox-group-subtitle">Transparent overlay elements with opacity: 0 and z-index: 9999 hijacking pointer events.</p>
+                  {credHarvester.hiddenOverlays.map((o, i) => (
                     <div key={i} className="code-box-display">
-                      <code>{s.pattern || s.src || JSON.stringify(s)}</code>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {sandbox.hiddenIframes?.length > 0 && (
-                <div className="sandbox-group-block">
-                  <div className="sandbox-group-title">
-                    <LuEyeOff /> Zero-Pixel Hidden IFrames
-                  </div>
-                  <p className="sandbox-group-subtitle">Invisible embedded frames capable of silent clickjacking or foreign session hijacking.</p>
-                  {sandbox.hiddenIframes.map((f, i) => (
-                    <div key={i} className="code-box-display">
-                      <code>{f.src || JSON.stringify(f)}</code>
+                      <code>{o.tag} {JSON.stringify(o.style)}</code>
                     </div>
                   ))}
                 </div>
@@ -608,62 +694,87 @@ function ResultsView({ result, onReset }) {
               {sandbox.sslIssues?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <LuLockOpen /> SSL / TLS Certificate Issues
+                    <LockOpen size={14} weight="bold" /> SSL / TLS Certificate Issues
                   </div>
                   {sandbox.sslIssues.map((s, i) => (
                     <div key={i} className="finding-row flagged">
-                      <span className="finding-dot"><LuCircleAlert /></span>
+                      <span className="finding-dot"><WarningCircle size={14} weight="bold" /></span>
                       <span className="finding-desc">{s.issue}</span>
                     </div>
                   ))}
                 </div>
               )}
-
-              {sandbox.missingSecHeaders?.length > 0 && (
-                <div className="sandbox-group-block">
-                  <div className="sandbox-group-title">
-                    <LuShield /> Missing Hardening Headers
-                  </div>
-                  <p className="sandbox-group-subtitle">Recommended HTTP security headers absent from target server response.</p>
-                  <div className="chips-cloud">
-                    {sandbox.missingSecHeaders.map((h, i) => (
-                      <span key={i} className="meta-chip chip-warn">{h}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="finding-row clean">
-              <span className="finding-dot"><LuLock /></span>
+              <span className="finding-dot"><Lock size={14} weight="bold" /></span>
               <span className="finding-desc">
-                Static page preview could not be fetched (site may be behind geo-restrictions, Cloudflare bot-checks, or offline).
+                Static page preview could not be fetched (site may be behind geo-restrictions, bot-checks, or offline).
               </span>
             </div>
           )}
         </CollapsibleSection>
+
+        {/* Section 4: Redirect Chain & Protocol Integrity */}
+        <CollapsibleSection
+          title="Redirect Chain & Protocol Integrity"
+          icon={<ShareNetwork size={16} weight="bold" />}
+          flaggedCount={redirect.tooManyRedirects || redirect.hops?.some(h => h.suspicious) ? 1 : 0}
+          defaultOpen={false}
+        >
+          {redirect.tooManyRedirects && (
+            <div className="finding-row flagged" style={{ marginBottom: 12 }}>
+              <span className="finding-dot"><WarningCircle size={14} weight="bold" /></span>
+              <span className="finding-desc">
+                Excessive redirect count ({redirect.hopCount} hops). Often employed by cloaking networks to evade automated inspection.
+              </span>
+            </div>
+          )}
+
+          {redirect.hops && redirect.hops.length > 0 ? (
+            <div className="pipeline-chain">
+              {redirect.hops.map((hop, i) => (
+                <div key={i} className="chain-hop-box">
+                  <div className="chain-hop-meta">
+                    <span className="chain-hop-tag">Hop {i + 1} ({hop.statusCode ? `HTTP ${hop.statusCode}` : 'Direct'})</span>
+                    <code className="chain-hop-url">{hop.url}</code>
+                  </div>
+                  <div className="chips-cloud">
+                    {hop.crossOrigin && <span className="meta-chip chip-warn">Cross-Origin</span>}
+                    {hop.isShortener && <span className="meta-chip">Shortener</span>}
+                    {hop.schemeDowngrade && <span className="meta-chip chip-bad">HTTPS → HTTP Downgrade</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="finding-desc" style={{ color: 'var(--text-muted)' }}>
+              Direct destination reached with zero intermediate redirects.
+            </p>
+          )}
+        </CollapsibleSection>
       </div>
 
-      {/* Report Action Bar */}
+      {/* Bottom Action Bar */}
       <div className="report-action-bar">
         <span className="report-notice-text">
-          <LuInfo /> Automated passive scan completed safely.
+          <Info size={14} weight="bold" /> Automated passive safety audit complete.
         </span>
 
         <div className="report-btns-group">
           <button
             type="button"
-            className="action-icon-btn"
-            onClick={copyFullReport}
+            className="mech-btn"
+            onClick={onOpenExportReport}
           >
-            {copiedKey === 'full-report' ? <><LuCheck /> Copied Report</> : <><LuFileText /> Copy Report</>}
+            <DownloadSimple size={14} weight="bold" /> Export Threat Dossier
           </button>
           <button
             type="button"
-            className="action-icon-btn"
+            className="mech-btn mech-btn-primary"
             onClick={onReset}
           >
-            <LuRefreshCw /> Scan Another URL
+            <Pulse size={14} weight="bold" /> Scan Another URL
           </button>
         </div>
       </div>
@@ -679,17 +790,20 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [showInfo, setShowInfo] = useState(false)
+  const [showSafePreview, setShowSafePreview] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
   const [currentStage, setCurrentStage] = useState('')
   const [sessionId, setSessionId] = useState(null)
+  const [activeEditorialTab, setActiveEditorialTab] = useState('telemetry') // 'telemetry' | 'methodology' | 'faq'
+  const [currentView, setCurrentView] = useState('inspector') // 'inspector' | 'developer'
 
-  // Theme state: defaults to Charcoal Dark mode to honor user palette preview
+  // Pure Monochrome Theme: defaults to dark
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('zeb-theme') || 'dark'
   })
 
   const inputRef = useRef(null)
 
-  // Sync theme with documentElement
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('zeb-theme', theme)
@@ -699,7 +813,7 @@ export default function App() {
     setTheme(t => (t === 'dark' ? 'light' : 'dark'))
   }
 
-  // Global keyboard shortcuts: "/" or "Ctrl+K" focuses input, "Esc" closes modal
+  // Keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -773,7 +887,6 @@ export default function App() {
     }
   }
 
-  // Quick preset test selector
   function handleSelectPreset(presetUrl) {
     setUrl(presetUrl)
     setError('')
@@ -781,7 +894,6 @@ export default function App() {
     inputRef.current?.focus()
   }
 
-  // Paste helper
   async function handlePaste() {
     try {
       const text = await navigator.clipboard.readText()
@@ -797,97 +909,146 @@ export default function App() {
 
   return (
     <div className="page">
+      {/* Modals */}
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
+      {showSafePreview && <SafePreviewModal result={result} onClose={() => setShowSafePreview(false)} />}
+      {showExportModal && <ReportExportModal result={result} onClose={() => setShowExportModal(false)} />}
 
-      <main className="card">
-        {/* Header Bar */}
-        <div className="card-header-bar">
+      {/* Cardless Layout Shell */}
+      <div className="layout-shell">
+        {/* Navigation Bar */}
+        <header className="top-nav-bar">
           <div className="brand-lockup">
-            <div className="shield-badge">
-              <LuShield />
+            <div className="brand-glyph-prefix" aria-hidden="true">
+              <Shield size={22} weight="bold" />
             </div>
-            <div className="brand-info">
-              <div className="brand-title-row">
-                <h1 className="brand-name">ZEB</h1>
-                <span className="version-chip">v2.4 Engine</span>
-              </div>
-              <div className="engine-status-row">
-                <span className="status-beacon" />
-                <span className="engine-status-text">Passive Threat Heuristics Active</span>
-              </div>
+            <div className="brand-title-wrap">
+              <span className="brand-name-bold">ZEB</span>
+              <span className="brand-name-italic">Security</span>
+              <span className="brand-badge-version">v2.4</span>
             </div>
           </div>
 
-          <div className="header-actions">
+          <div className="nav-actions-cluster">
             <button
               type="button"
-              className="action-icon-btn"
+              className={`mech-btn ${currentView === 'developer' ? 'mech-btn-primary' : ''}`}
+              onClick={() => setCurrentView(v => v === 'developer' ? 'inspector' : 'developer')}
+              title="Developer API & Keys Management"
+            >
+              <TerminalWindow size={14} weight="bold" />
+              <span>{currentView === 'developer' ? 'URL Inspector' : 'Developer API'}</span>
+            </button>
+
+            <button
+              type="button"
+              className="mech-btn"
               onClick={() => setShowInfo(true)}
               title="Inspect checking methodology (?)"
             >
-              <LuInfo />
+              <Info size={14} weight="bold" />
               <span>How it works</span>
-              <kbd className="kbd-hint">?</kbd>
             </button>
 
-            <button
-              type="button"
-              className="action-icon-btn"
-              onClick={toggleTheme}
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-              aria-label="Toggle visual theme"
-            >
-              {theme === 'dark' ? <LuSun /> : <LuMoon />}
-            </button>
+            {/* Sliding Rectangular Theme Switcher */}
+            <ThemeSwitch theme={theme} onToggle={toggleTheme} />
           </div>
-        </div>
+        </header>
 
-        {/* Card Content Area */}
-        <div className="card-content">
-          <p className="console-description">
-            Inspect any web link, domain, or shortened redirect before interacting. Passive scanners check Google threat feeds, WHOIS registration velocity, and DOM phishing heuristics.
+        {currentView === 'developer' ? (
+          <DeveloperPortal onBackToInspector={() => setCurrentView('inspector')} />
+        ) : (
+          <>
+
+        {/* Cardless Editorial Hero */}
+        <section className="cardless-hero-section">
+          <div className="breadcrumb-pill-row">
+            <span className="breadcrumb-pill">
+              <ShieldCheck size={12} weight="bold" />
+              <span>SECURITY CORE</span>
+              <span>/</span>
+              <span>ACTIVE HEURISTICS</span>
+            </span>
+          </div>
+
+          <h1 className="hero-headline">Zero-Trust Link Inspector</h1>
+
+          <div className="hero-author-meta">
+            <span className="status-live-beacon" />
+            <span>Continuous Passive URL Heuristics & Consensus Engine</span>
+          </div>
+
+          <p className="hero-lead-text">
+            Deconstructs obfuscated redirect chains, unpacks hex/decimal IP routing, identifies zero-hour homograph lures, and audits client-side DOM forms without executing untrusted scripts.
           </p>
+        </section>
 
-          {/* Search Form */}
-          <form className="checker-form" onSubmit={handleSubmit}>
-            <div className="input-shell">
-              <span className="input-leading-icon">
-                <LuLink />
-              </span>
-              <input
-                ref={inputRef}
-                type="text"
-                className="url-input-field"
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-                placeholder="Paste URL (e.g. github.com, bit.ly/sample, http://192.168.1.1)"
-                aria-label="URL to inspect"
-                disabled={loading}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <div className="input-trailing-actions">
-                {url && !loading && (
-                  <button
-                    type="button"
-                    className="input-util-btn"
-                    onClick={() => { setUrl(''); setResult(null); setError(''); inputRef.current?.focus() }}
-                    title="Clear input"
-                  >
-                    <LuX />
-                  </button>
-                )}
-                {!url && !loading && (
-                  <button
-                    type="button"
-                    className="input-util-btn"
-                    onClick={handlePaste}
-                    title="Paste from clipboard"
-                  >
-                    <LuClipboard />
-                  </button>
-                )}
-              </div>
+        {/* Search Input Form */}
+        <form className="checker-form" onSubmit={handleSubmit}>
+          <div className="input-shell">
+            <span className="input-leading-icon">
+              <LinkIcon size={18} weight="bold" />
+            </span>
+            <input
+              ref={inputRef}
+              type="text"
+              className="url-input-field"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="Paste URL (e.g. github.com, bit.ly/sample, http://2130706433/login)"
+              aria-label="URL to inspect"
+              disabled={loading}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <div className="input-trailing-actions">
+              {url && !loading && (
+                <button
+                  type="button"
+                  className="input-util-btn"
+                  onClick={() => { setUrl(''); setResult(null); setError(''); inputRef.current?.focus() }}
+                  title="Clear input"
+                >
+                  <X size={14} weight="bold" />
+                </button>
+              )}
+              {!url && !loading && (
+                <button
+                  type="button"
+                  className="input-util-btn"
+                  onClick={handlePaste}
+                  title="Paste from clipboard"
+                >
+                  <ClipboardText size={14} weight="bold" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="form-action-row">
+            <div className="quick-presets-row">
+              <span className="presets-label">Samples:</span>
+              <button
+                type="button"
+                className="preset-pill"
+                onClick={() => handleSelectPreset('https://github.com')}
+              >
+                <span>Clean:</span> <code>github.com</code>
+              </button>
+              <button
+                type="button"
+                className="preset-pill"
+                onClick={() => handleSelectPreset('https://bit.ly/3xSecurityDemo')}
+              >
+                <span>Shortener:</span> <code>bit.ly/sample</code>
+              </button>
+              <button
+                type="button"
+                className="preset-pill"
+                onClick={() => handleSelectPreset('http://192.168.1.1/login')}
+              >
+                <span>IP Host:</span> <code>192.168.1.1</code>
+              </button>
             </div>
 
             <button type="submit" className="check-submit-btn" disabled={loading}>
@@ -898,69 +1059,147 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <LuSearch />
-                  <span>Check URL</span>
+                  <MagnifyingGlass size={16} weight="bold" />
+                  <span>Inspect URL</span>
                 </>
               )}
             </button>
-          </form>
-
-          {/* Quick Test Presets */}
-          <div className="quick-presets-row">
-            <span className="presets-label">Test Samples:</span>
-            <button
-              type="button"
-              className="preset-pill"
-              onClick={() => handleSelectPreset('https://github.com')}
-            >
-              <span>Clean:</span> <code>github.com</code>
-            </button>
-            <button
-              type="button"
-              className="preset-pill"
-              onClick={() => handleSelectPreset('https://bit.ly/3xSecurityDemo')}
-            >
-              <span>Shortener:</span> <code>bit.ly/sample</code>
-            </button>
-            <button
-              type="button"
-              className="preset-pill"
-              onClick={() => handleSelectPreset('http://192.168.1.1/login')}
-            >
-              <span>IP Host:</span> <code>192.168.1.1</code>
-            </button>
           </div>
+        </form>
 
-          {/* Real-time Multi-Stage Progress Scanner */}
-          {loading && <ProgressBar currentStageLabel={currentStage} />}
+        {/* Real-time Multi-Stage Progress Scanner */}
+        {loading && <ProgressBar currentStageLabel={currentStage} />}
 
-          {/* Error Banner */}
-          {error && (
-            <div className="error-banner" role="alert">
-              <span className="error-banner-icon">
-                <LuCircleX />
-              </span>
-              <div className="error-banner-content">
-                <div className="error-banner-title">Inspection Error</div>
-                <div className="error-banner-desc">{error}</div>
+        {/* Error Banner */}
+        {error && (
+          <div className="threat-module" role="alert" style={{ marginTop: 16 }}>
+            <div className="threat-module-title">
+              <XCircle size={16} weight="bold" />
+              <span>Inspection Error</span>
+            </div>
+            <p className="threat-explanation">{error}</p>
+          </div>
+        )}
+
+        {/* Inline Animated Interactive Pipeline Demo (Always available on canvas) */}
+        {!result && (
+          <InteractivePipelineDemo onSelectScenarioUrl={handleSelectPreset} />
+        )}
+
+        {/* Results View */}
+        {result && !loading && (
+          <ResultsView
+            result={result}
+            onReset={() => {
+              setResult(null)
+              setUrl('')
+              setError('')
+              inputRef.current?.focus()
+            }}
+            onOpenSafePreview={() => setShowSafePreview(true)}
+            onOpenExportReport={() => setShowExportModal(true)}
+          />
+        )}
+
+        {/* Editorial Information Tabs */}
+        <div className="editorial-tabs-bar" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeEditorialTab === 'telemetry'}
+            className={`editorial-tab-btn ${activeEditorialTab === 'telemetry' ? 'active' : ''}`}
+            onClick={() => setActiveEditorialTab('telemetry')}
+          >
+            Engine Specifications
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeEditorialTab === 'methodology'}
+            className={`editorial-tab-btn ${activeEditorialTab === 'methodology' ? 'active' : ''}`}
+            onClick={() => setActiveEditorialTab('methodology')}
+          >
+            Detection Architecture
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeEditorialTab === 'faq'}
+            className={`editorial-tab-btn ${activeEditorialTab === 'faq' ? 'active' : ''}`}
+            onClick={() => setActiveEditorialTab('faq')}
+          >
+            Technical FAQ
+          </button>
+        </div>
+
+        {/* Editorial Tab Contents */}
+        {activeEditorialTab === 'telemetry' && (
+          <div className="editorial-content-pane">
+            <p className="hero-lead-text" style={{ marginBottom: 16 }}>
+              ZEB v2.4 operates a passive hybrid detection matrix designed to analyze zero-hour attack vectors without local workstation compromise.
+            </p>
+            <div className="engine-check-grid">
+              <div className="engine-check-card">
+                <span className="engine-card-icon"><ShareNetwork size={18} weight="bold" /></span>
+                <div className="engine-card-details">
+                  <strong>Pillar 1: URL Exposing & De-obfuscation</strong>
+                  <p>Decodes decimal Dword, octal, and hex IP addresses. Unrolls recursive Base64 parameters and traces shortener hops.</p>
+                </div>
+              </div>
+              <div className="engine-check-card">
+                <span className="engine-card-icon"><Shield size={18} weight="bold" /></span>
+                <div className="engine-card-details">
+                  <strong>Pillar 2: Multi-Engine Intelligence</strong>
+                  <p>Consensus arbitration across commercial reputation feeds with zero-panic degradation if external APIs fail.</p>
+                </div>
+              </div>
+              <div className="engine-check-card">
+                <span className="engine-card-icon"><Database size={18} weight="bold" /></span>
+                <div className="engine-card-details">
+                  <strong>Pillar 3: Infrastructure & DNS</strong>
+                  <p>Evaluates Fast-Flux DNS, Autonomous System bulletproof hosting, and TLS certificate age thresholds (&lt;24 hours).</p>
+                </div>
+              </div>
+              <div className="engine-check-card">
+                <span className="engine-card-icon"><Code size={18} weight="bold" /></span>
+                <div className="engine-card-details">
+                  <strong>Pillar 5: Deep DOM & Web3 Sniffer</strong>
+                  <p>Detects unencrypted passwords, clickjacking traps, Permit2 signatures, and dangerous MIME payload traps.</p>
+                </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Comprehensive Results Display */}
-          {result && !loading && (
-            <ResultsView
-              result={result}
-              onReset={() => {
-                setResult(null)
-                setUrl('')
-                setError('')
-                inputRef.current?.focus()
-              }}
-            />
-          )}
-        </div>
-      </main>
+        {activeEditorialTab === 'methodology' && (
+          <div className="editorial-content-pane">
+            <p className="hero-lead-text">
+              Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host.
+            </p>
+          </div>
+        )}
+
+        {activeEditorialTab === 'faq' && (
+          <div className="editorial-content-pane">
+            <div className="findings-stream">
+              <div className="finding-row clean">
+                <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                <span className="finding-desc">
+                  <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
+                </span>
+              </div>
+              <div className="finding-row clean">
+                <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                <span className="finding-desc">
+                  <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable links or preview cards.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

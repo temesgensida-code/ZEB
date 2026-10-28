@@ -1,5 +1,127 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ZEB MONOCHROME CYBER-TERMINAL & CARDLESS DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 :root {
+  /* Absolute Monochrome Primitives */
+  --mono-0:     #000000;
+  --mono-10:    #111111;
+  --mono-20:    #1A1A1A;
+  --mono-30:    #262626;
+  --mono-40:    #404040;
+  --mono-60:    #737373;
+  --mono-80:    #A3A3A3;
+  --mono-90:    #D4D4D4;
+  --mono-95:    #F5F5F5;
+  --mono-100:   #FFFFFF;
+
+  /* Edgy Micro-Radius Geometry for Interactive Controls */
+  --radius-xs:  2px;
+  --radius-sm:  3px;
+  --radius-md:  4px;
+
+  /* Mechanical Shadow Offsets */
+  --mech-shadow-light: 2px 2px 0px #000000;
+  --mech-shadow-dark:  2px 2px 0px #FFFFFF;
+
+  /* Typography */
+  --font-brand: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
   color-scheme: light dark;
+}
+
+/* Light Theme: Pure White Open Canvas with Crisp Black Typography */
+[data-theme="light"], :root:not([data-theme="dark"]) {
+  --bg-page:            var(--mono-100);       /* #FFFFFF */
+  --bg-surface:         var(--mono-100);
+  --bg-inset:           var(--mono-95);        /* #F5F5F5 */
+  --bg-overlay:         rgba(0, 0, 0, 0.75);
+
+  --border-primary:     var(--mono-0);         /* Solid #000000 */
+  --border-muted:       var(--mono-90);        /* Crisp #D4D4D4 */
+  --border-subtle:      var(--mono-95);
+
+  --text-primary:       var(--mono-0);         /* Solid #000000 */
+  --text-secondary:     var(--mono-30);        /* #262626 */
+  --text-muted:         var(--mono-60);        /* #737373 */
+  --text-inverted:      var(--mono-100);       /* #FFFFFF */
+
+  --btn-primary-bg:     var(--mono-0);
+  --btn-primary-text:   var(--mono-100);
+  --btn-primary-border: var(--mono-0);
+  --btn-shadow:         var(--mech-shadow-light);
+
+  --btn-secondary-bg:   var(--mono-100);
+  --btn-secondary-text: var(--mono-0);
+  --btn-secondary-border: var(--mono-0);
+
+  --grid-plus-stroke:   rgba(0, 0, 0, 0.08);
+
+  /* Functional Risk Accents */
+  --risk-safe-text:     #059669;
+  --risk-safe-bg:       #ECFDF5;
+  --risk-safe-border:   #10B981;
+  --risk-safe-accent:   #10B981;
+
+  --risk-warn-text:     #D97706;
+  --risk-warn-bg:       #FFFBEB;
+  --risk-warn-border:   #F59E0B;
+  --risk-warn-accent:   #F59E0B;
+
+  --risk-danger-text:   #DC2626;
+  --risk-danger-bg:     #FEF2F2;
+  --risk-danger-border: #EF4444;
+  --risk-danger-accent: #EF4444;
+
+  --focus-ring:         var(--mono-0);
+}
+
+/* Dark Theme: Pure Black Open Canvas with Crisp White Typography */
+[data-theme="dark"] {
+  --bg-page:            var(--mono-0);         /* #000000 */
+  --bg-surface:         var(--mono-10);        /* #111111 */
+  --bg-inset:           var(--mono-20);
+  --bg-overlay:         rgba(0, 0, 0, 0.88);
+
+  --border-primary:     var(--mono-100);       /* Solid #FFFFFF */
+  --border-muted:       var(--mono-30);        /* #262626 */
+  --border-subtle:      var(--mono-20);
+
+  --text-primary:       var(--mono-100);       /* Solid #FFFFFF */
+  --text-secondary:     var(--mono-90);        /* #D4D4D4 */
+  --text-muted:         var(--mono-60);        /* #737373 */
+  --text-inverted:      var(--mono-0);         /* #000000 */
+
+  --btn-primary-bg:     var(--mono-100);
+  --btn-primary-text:   var(--mono-0);
+  --btn-primary-border: var(--mono-100);
+  --btn-shadow:         var(--mech-shadow-dark);
+
+  --btn-secondary-bg:   var(--mono-0);
+  --btn-secondary-text: var(--mono-100);
+  --btn-secondary-border: var(--mono-100);
+
+  --grid-plus-stroke:   rgba(255, 255, 255, 0.09);
+
+  /* Functional Risk Accents */
+  --risk-safe-text:     #34D399;
+  --risk-safe-bg:       rgba(16, 185, 129, 0.12);
+  --risk-safe-border:   #059669;
+  --risk-safe-accent:   #10B981;
+
+  --risk-warn-text:     #FBBF24;
+  --risk-warn-bg:       rgba(245, 158, 11, 0.12);
+  --risk-warn-border:   #D97706;
+  --risk-warn-accent:   #F59E0B;
+
+  --risk-danger-text:   #F87171;
+  --risk-danger-bg:     rgba(239, 68, 68, 0.12);
+  --risk-danger-border: #DC2626;
+  --risk-danger-accent: #EF4444;
+
+  --focus-ring:         var(--mono-100);
 }
 
 *, *::before, *::after {
@@ -10,38 +132,40 @@
 
 html, body {
   min-height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* Accessible focus outlines */
+/* Accessible focus outlines with mechanical box shape */
 :focus-visible {
-  outline: 2px solid var(--c-500, #394956);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* Custom scrollbars matching Charcoal system */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg, #141E26);
+  background: var(--bg-page);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--c-500, #394956);
-  border-radius: 4px;
+  background: var(--border-muted);
+  border-radius: var(--radius-xs);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--c-400, #4F5D6B);
+  background: var(--text-muted);
 }
 
 ::selection {
-  background: rgba(57, 73, 86, 0.35);
-  color: inherit;
+  background: var(--text-primary);
+  color: var(--bg-page);
 }

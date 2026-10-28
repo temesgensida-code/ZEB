@@ -123,10 +123,24 @@ KEYBOARD_ADJACENT: dict[str, str] = {
 OPEN_REDIRECT_PARAMS: frozenset[str] = frozenset({
     'url', 'redirect', 'redirect_to', 'redirect_url', 'redirecturl',
     'return', 'return_to', 'returnurl', 'return_url',
-    'next', 'goto', 'target', 'dest', 'destination',
+    'next', 'goto', 'target', 'dest', 'destination', 'dest_url',
     'link', 'forward', 'out', 'continue', 'to',
-    'checkout_url', 'image_url', 'callback',
+    'checkout_url', 'image_url', 'callback', 'site',
+    'q', 'u', 'r',
 })
+
+# ---------------------------------------------------------------------------
+# Exfiltration sink regex patterns for form actions and credential drops
+# ---------------------------------------------------------------------------
+EXFILTRATION_SINK_PATTERNS: list[tuple[str, str]] = [
+    (r'^https?://api\.telegram\.org/bot[^/]+/sendMessage', 'TELEGRAM_BOT_API'),
+    (r'^https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+', 'DISCORD_WEBHOOK'),
+    (r'^https?://docs\.google\.com/forms/d/e/[^/]+/formResponse', 'GOOGLE_FORMS_DROP'),
+    (r'^https?://formspree\.io/f/[A-Za-z0-9]+', 'FORMSPREE_SERVICE'),
+    (r'^https?://formsubmit\.co/', 'FORMSUBMIT_SERVICE'),
+    (r'^https?://api\.web3forms\.com/submit', 'WEB3FORMS_SERVICE'),
+    (r'^https?://formkeep\.com/f/', 'FORMKEEP_SERVICE'),
+]
 
 # ---------------------------------------------------------------------------
 # Path-segment keywords commonly found in phishing landing pages.

@@ -467,3 +467,244 @@ def detect_typosquatting_brand(domain: str) -> str | None:
             return brand
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Obfuscated IP and Host Representation Decoders (Sub-Pillar 1.2)
+# ---------------------------------------------------------------------------
+
+def decode_obfuscated_ip(hostname: str) -> tuple[str | None, str | None]:
+    """
+    Parses non-standard and obfuscated IPv4 representations replicating POSIX inet_aton rules.
+    Supports:
+      • 32-bit Dword integer (e.g. 2130706433 -> 127.0.0.1)
+      • Hex Dword (e.g. 0x7f000001 -> 127.0.0.1)
+      • Dotted Hex/Octal/Mixed notation (e.g. 0177.0.0.1 -> 127.0.0.1)
+      • IPv6-Mapped IPv4 (e.g. [::ffff:127.0.0.1] -> 127.0.0.1)
+
+    Returns:
+      (canonical_dotted_decimal_ip, obfuscation_type) or (None, None)
+    """
+    if not hostname:
+        return (None, None)
+
+    host = hostname.strip().lower()
+
+    # Strip port if present for standard hosts (e.g. host:80)
+    if ':' in host and not host.startswith('['):
+        if host.count(':') == 1:
+            host = host.split(':')[0]
+
+    # IPv6-mapped IPv4 check: [::ffff:127.0.0.1] or ::ffff:127.0.0.1
+    if host.startswith('[') and host.endswith(']'):
+        inner = host[1:-1]
+        if inner.startswith('::ffff:'):
+            mapped_ip = inner.split('::ffff:')[-1]
+            try:
+                IPv4Address(mapped_ip)
+                return (mapped_ip, 'IPV6_MAPPED_IPV4')
+            except ValueError:
+                pass
+    elif host.startswith('::ffff:'):
+        mapped_ip = host.split('::ffff:')[-1]
+        try:
+            IPv4Address(mapped_ip)
+            return (mapped_ip, 'IPV6_MAPPED_IPV4')
+        except ValueError:
+            pass
+
+    # Hex Dword check (0x...)
+    if re.fullmatch(r'0x[0-9a-fA-F]+', host):
+        try:
+            val = int(host, 16)
+            if 0 <= val <= 0xFFFF_FFFF:
+                ip = str(IPv4Address(val))
+                return (ip, 'HEX_DWORD')
+        except ValueError:
+            pass
+
+    # Pure Decimal integer check (DWORD)
+    if re.fullmatch(r'\d+', host):
+        try:
+            val = int(host, 10)
+            if 0 <= val <= 0xFFFF_FFFF:
+                ip = str(IPv4Address(val))
+                return (ip, 'DWORD')
+        except ValueError:
+            pass
+
+    # Multi-segment dotted notation (1 to 4 segments)
+    parts = host.split('.')
+    if 2 <= len(parts) <= 4:
+        parsed_vals = []
+        has_octal = False
+        has_hex = False
+
+        for part in parts:
+            if not part:
+                return (None, None)
+            if part.startswith('0x') or part.startswith('0X'):
+                try:
+                    val = int(part, 16)
+                    parsed_vals.append(val)
+                    has_hex = True
+                except ValueError:
+                    return (None, None)
+            elif part.startswith('0') and len(part) > 1 and re.fullmatch(r'[0-7]+', part):
+                try:
+                    val = int(part, 8)
+                    parsed_vals.append(val)
+                    has_octal = True
+                except ValueError:
+                    return (None, None)
+            elif re.fullmatch(r'\d+', part):
+                try:
+                    val = int(part, 10)
+                    parsed_vals.append(val)
+                except ValueError:
+                    return (None, None)
+            else:
+                return (None, None)
+
+        if len(parts) == 4:
+            if all(0 <= v <= 255 for v in parsed_vals):
+                canonical_ip = f"{parsed_vals[0]}.{parsed_vals[1]}.{parsed_vals[2]}.{parsed_vals[3]}"
+                if has_hex and has_octal:
+                    obf_type = 'MIXED_BASE'
+                elif has_hex:
+                    obf_type = 'DOTTED_HEX'
+                elif has_octal:
+                    obf_type = 'DOTTED_OCTAL'
+                else:
+                    return (canonical_ip, None)
+                return (canonical_ip, obf_type)
+        elif len(parts) == 3:
+            a, b, c = parsed_vals
+            if 0 <= a <= 255 and 0 <= b <= 255 and 0 <= c <= 0xFFFF:
+                canonical_ip = f"{a}.{b}.{(c >> 8) & 0xFF}.{c & 0xFF}"
+                obf_type = 'MIXED_BASE' if (has_hex or has_octal) else 'CLASS_B_EXPANDED'
+                return (canonical_ip, obf_type)
+        elif len(parts) == 2:
+            a, b = parsed_vals
+            if 0 <= a <= 255 and 0 <= b <= 0xFF_FFFF:
+                canonical_ip = f"{a}.{(b >> 16) & 0xFF}.{(b >> 8) & 0xFF}.{b & 0xFF}"
+                obf_type = 'MIXED_BASE' if (has_hex or has_octal) else 'CLASS_A_EXPANDED'
+                return (canonical_ip, obf_type)
+
+    return (None, None)
+
+
+# ---------------------------------------------------------------------------
+# Userinfo Deception Auditor (Sub-Pillar 1.2)
+# ---------------------------------------------------------------------------
+
+def extract_and_audit_userinfo(url: str) -> dict:
+    """
+    Isolates fake credential prefix preceding '@' and audits for brand spoofing or deception.
+    """
+    if not url:
+        return {
+            'detected': False,
+            'deceptivePrefix': None,
+            'targetHost': None,
+            'cleanedUrl': url,
+            'flagged': False,
+            'explanation': None,
+        }
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return {
+            'detected': False,
+            'deceptivePrefix': None,
+            'targetHost': None,
+            'cleanedUrl': url,
+            'flagged': False,
+            'explanation': None,
+        }
+
+    netloc = parsed.netloc
+
+    if '@' not in netloc:
+        return {
+            'detected': False,
+            'deceptivePrefix': None,
+            'targetHost': parsed.hostname,
+            'cleanHost': parsed.hostname,
+            'cleanedUrl': url,
+            'flagged': False,
+            'explanation': None,
+        }
+
+    userinfo, _, target_host = netloc.rpartition('@')
+    low_userinfo = userinfo.lower()
+
+    # Check for brand names or deceptive keywords in userinfo
+    is_deceptive = False
+    for brand in BRAND_KEYWORDS:
+        if brand in low_userinfo:
+            is_deceptive = True
+            break
+
+    if any(keyword in low_userinfo for keyword in ('.com', '.net', '.org', '.io', '.co', 'login', 'verify', 'account', 'secure')):
+        is_deceptive = True
+
+    cleaned_url = urlunparse((parsed.scheme, target_host, parsed.path, parsed.params, parsed.query, parsed.fragment))
+
+    explanation = (
+        f"Deceptive userinfo detected: The URL embeds '{userinfo}' before '@' to mimic a trusted entity, "
+        f"while routing the browser to destination '{target_host}'."
+    ) if is_deceptive else (
+        f"URL contains embedded credentials/userinfo '{userinfo}' preceding the actual destination host '{target_host}'."
+    )
+
+    return {
+        'detected': True,
+        'deceptivePrefix': userinfo,
+        'targetHost': target_host,
+        'cleanHost': target_host,
+        'cleanedUrl': cleaned_url,
+        'flagged': True,
+        'explanation': explanation,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Re-fanging & Defanging Functions (Sub-Pillar 1.5)
+# ---------------------------------------------------------------------------
+
+def refang_url(candidate: str) -> str:
+    """
+    Transforms hxxp[s], [.], [:], [/] brackets into valid canonical URLs.
+    Example: 'hxxps[://]attacker[.]com/login' -> 'https://attacker.com/login'
+    """
+    if not candidate:
+        return ''
+    val = candidate.strip()
+    val = re.sub(r'^hxxps(\[:\/\/\]|\[:\/\/?|\(\:\/\/\)|\:\/\/)', 'https://', val, flags=re.I)
+    val = re.sub(r'^hxxp(\[:\/\/\]|\[:\/\/?|\(\:\/\/\)|\:\/\/)', 'http://', val, flags=re.I)
+    val = re.sub(r'^h\[tt\]ps(\[:\/\/\]|\:\/\/)', 'https://', val, flags=re.I)
+    val = re.sub(r'^h\[tt\]p(\[:\/\/\]|\:\/\/)', 'http://', val, flags=re.I)
+    val = re.sub(r'\[\.\]|\(\.\)|\{\.\}|\[dot\]', '.', val, flags=re.I)
+    val = re.sub(r'\[\:\]|\(\:\)|\[colon\]', ':', val, flags=re.I)
+    val = re.sub(r'\[\/\]|\(\/\)|\[slash\]', '/', val, flags=re.I)
+    return val
+
+
+def defang_url(url: str) -> str:
+    """
+    Converts https://evil.com/path -> hxxps[://]evil[.]com/path for safe sharing.
+    """
+    if not url:
+        return ''
+    defanged = re.sub(r'^https://', 'hxxps[://]', url, flags=re.I)
+    defanged = re.sub(r'^http://', 'hxxp[://]', defanged, flags=re.I)
+    try:
+        parsed = urlparse(url)
+        if parsed.netloc:
+            defanged_host = parsed.netloc.replace('.', '[.]')
+            defanged = defanged.replace(parsed.netloc, defanged_host, 1)
+    except Exception:
+        pass
+    return defanged
