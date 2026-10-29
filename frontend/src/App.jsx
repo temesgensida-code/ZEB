@@ -797,21 +797,39 @@ export default function App() {
   const [activeEditorialTab, setActiveEditorialTab] = useState('telemetry') // 'telemetry' | 'methodology' | 'faq'
   const [currentView, setCurrentView] = useState('inspector') // 'inspector' | 'developer'
 
-  // Pure Monochrome Theme: defaults to dark
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('zeb-theme') || 'dark'
+  // Pure Monochrome Theme & System Adaptation: defaults to system or saved preference
+  const [themePreference, setThemePreference] = useState(() => {
+    return localStorage.getItem('zeb-theme-pref') || 'system'
   })
 
   const inputRef = useRef(null)
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('zeb-theme', theme)
-  }, [theme])
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
 
-  function toggleTheme() {
-    setTheme(t => (t === 'dark' ? 'light' : 'dark'))
-  }
+    function applyEffectiveTheme() {
+      let resolved = themePreference
+      if (themePreference === 'system') {
+        resolved = mql.matches ? 'dark' : 'light'
+      }
+      document.documentElement.setAttribute('data-theme', resolved)
+      localStorage.setItem('zeb-theme', resolved)
+      localStorage.setItem('zeb-theme-pref', themePreference)
+    }
+
+    applyEffectiveTheme()
+
+    function handleSystemThemeChange(e) {
+      if (themePreference === 'system') {
+        const resolved = e.matches ? 'dark' : 'light'
+        document.documentElement.setAttribute('data-theme', resolved)
+        localStorage.setItem('zeb-theme', resolved)
+      }
+    }
+
+    mql.addEventListener('change', handleSystemThemeChange)
+    return () => mql.removeEventListener('change', handleSystemThemeChange)
+  }, [themePreference])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -932,26 +950,36 @@ export default function App() {
           <div className="nav-actions-cluster">
             <button
               type="button"
-              className={`mech-btn ${currentView === 'developer' ? 'mech-btn-primary' : ''}`}
-              onClick={() => setCurrentView(v => v === 'developer' ? 'inspector' : 'developer')}
-              title="Developer API & Keys Management"
+              className={`header-nav-link ${currentView === 'inspector' ? 'active' : ''}`}
+              onClick={() => setCurrentView('inspector')}
+              title="URL Threat Inspector"
             >
-              <TerminalWindow size={14} weight="bold" />
-              <span>{currentView === 'developer' ? 'URL Inspector' : 'Developer API'}</span>
+              <span>URL Inspector</span>
             </button>
 
             <button
               type="button"
-              className="mech-btn"
+              className={`header-nav-link ${currentView === 'developer' ? 'active' : ''}`}
+              onClick={() => setCurrentView('developer')}
+              title="Developer API & Keys Management"
+            >
+              <span>Developer API</span>
+            </button>
+
+            <button
+              type="button"
+              className="header-nav-link"
               onClick={() => setShowInfo(true)}
               title="Inspect checking methodology (?)"
             >
-              <Info size={14} weight="bold" />
               <span>How it works</span>
             </button>
 
-            {/* Sliding Rectangular Theme Switcher */}
-            <ThemeSwitch theme={theme} onToggle={toggleTheme} />
+            {/* Cubic 3-Way Theme Switcher with System Adaptation */}
+            <ThemeSwitch
+              themePreference={themePreference}
+              onSelectTheme={setThemePreference}
+            />
           </div>
         </header>
 
