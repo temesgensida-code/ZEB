@@ -580,7 +580,7 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     # ------------------------------------------------------------------
     # 6. HTML content-type guard
     # ------------------------------------------------------------------
-    content_type = response.headers.get('Content-Type', '').lower()
+    content_type = (response.headers.get('Content-Type') or response.headers.get('content-type') or '').lower()
     if 'html' not in content_type:
         findings.append({
             'type': 'SANDBOX_NON_HTML_CONTENT',
@@ -607,6 +607,35 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
             'redirectIssues': redirect_issues,
             'urlEntropyScore': url_entropy,
             'riskScore': risk_score,
+            'linkXRay': {
+                'forms': [],
+                'externalAssetCount': 0,
+                'hiddenIframesCount': 0,
+                'exfiltrationSinksDetected': [],
+            },
+            'payloadInspection': {
+                'credentialHarvester': {
+                    'isHttpLogin': False,
+                    'hasPasswordInput': False,
+                    'sensitiveInputsFound': [],
+                },
+                'clickjacking': {
+                    'hasClickjackingOverlays': False,
+                    'overlayCount': 0,
+                    'overlays': [],
+                },
+                'web3Drainer': {
+                    'hasWeb3DrainerSignatures': False,
+                    'detectedSignatures': [],
+                },
+                'driveByDownload': {
+                    'isExecutableDownload': False,
+                    'isDoubleExtension': False,
+                    'downloadFilename': None,
+                    'contentType': '',
+                    'autoDownloadAnchors': [],
+                },
+            },
         }
 
     # ------------------------------------------------------------------
@@ -616,6 +645,7 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     soup = BeautifulSoup(html, 'html.parser')
     page_text = soup.get_text(' ', strip=True).lower()
     page_host = (urlparse(response.url).hostname or '').lower()
+    page_registered = tldextract.extract(page_host).registered_domain.lower() if page_host else ''
 
     # ------------------------------------------------------------------
     # 8. Phishing keyword scan

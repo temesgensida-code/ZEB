@@ -691,3 +691,82 @@ class Pillar7DeveloperApiTests(TestCase):
         # Critical assertion: Commercial APIs were NEVER called
         mock_gsb.assert_not_called()
         mock_vt.assert_not_called()
+
+
+class SandboxPreviewRegressionTests(TestCase):
+    """
+    Regression tests for analyze_sandbox_preview ensuring no NameError: page_registered
+    and verifying consistent dictionary return structures for HTML and non-HTML payloads.
+    """
+
+    @patch('service.url_checks.sandbox_preview.requests.get')
+    def test_analyze_sandbox_preview_html_evaluation_success(self, mock_get):
+        """Verify analyze_sandbox_preview evaluates HTML pages without NameError: page_registered."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {'content-type': 'text/html; charset=utf-8'}
+        mock_resp.url = 'https://secure-login.example.com/login'
+        mock_resp.text = (
+            '<html><head><title>Sign In</title></head><body>'
+            '<form action="/auth" method="POST">'
+            '<input type="text" name="username">'
+            '<input type="password" name="password">'
+            '<input type="text" name="ssn">'
+            '</form>'
+            '</body></html>'
+        )
+        mock_resp.history = []
+        mock_get.return_value = mock_resp
+
+        findings = []
+        res = analyze_sandbox_preview('https://secure-login.example.com/login', findings)
+
+        self.assertTrue(res['available'])
+        self.assertTrue(res['htmlAnalyzed'])
+        self.assertEqual(res['fetchedUrl'], 'https://secure-login.example.com/login')
+        self.assertIn('payloadInspection', res)
+        self.assertIn('credentialHarvester', res['payloadInspection'])
+        self.assertIn('linkXRay', res)
+        self.assertIn('forms', res['linkXRay'])
+
+    @patch('service.url_checks.sandbox_preview.requests.get')
+    def test_analyze_sandbox_preview_non_html_response(self, mock_get):
+        """Verify analyze_sandbox_preview handles non-HTML content with fallback keys."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {'content-type': 'application/pdf'}
+        mock_resp.url = 'https://example.com/document.pdf'
+        mock_resp.text = '%PDF-1.4 binary content'
+        mock_resp.history = []
+        mock_get.return_value = mock_resp
+
+        findings = []
+        res = analyze_sandbox_preview('https://example.com/document.pdf', findings)
+
+        self.assertTrue(res['available'])
+        self.assertFalse(res['htmlAnalyzed'])
+        self.assertIn('payloadInspection', res)
+        self.assertIn('linkXRay', res)
+
+    @patch('service.url_checks.sandbox_preview.requests.get')
+    def test_check_url_api_endpoint_sandbox_integration(self, mock_get):
+        """Verify POST /api/check-url/ successfully finishes and returns 200 without crashing."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {'content-type': 'text/html'}
+        mock_resp.url = 'https://portal.example.org/'
+        mock_resp.text = '<html><head><title>Home</title></head><body>Welcome</body></html>'
+        mock_resp.history = []
+        mock_get.return_value = mock_resp
+
+        resp = self.client.post(
+            '/api/check-url/',
+            {'url': 'https://portal.example.org/'},
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('structureAnalysis', data)
+        self.assertIn('sandboxPreview', data['structureAnalysis'])
+        self.assertIn('payloadInspection', data['structureAnalysis']['sandboxPreview'])
+

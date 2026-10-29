@@ -1,8 +1,11 @@
+import logging
 import unicodedata
 from urllib.parse import urlparse
 
 import idna
 import tldextract
+
+logger = logging.getLogger(__name__)
 
 from .common import (
     decode_obfuscated_ip,
@@ -226,10 +229,59 @@ def analyze_url_structure(target_url: str) -> dict:
 
     domain_age = analyze_domain_age(registered_domain_full, findings)
     redirect_analysis = analyze_redirect_chain(target_url, registered_domain_full, findings)
-    sandbox_preview = analyze_sandbox_preview(
-        redirect_analysis['finalUrl'] or target_url,
-        findings,
-    )
+    try:
+        sandbox_preview = analyze_sandbox_preview(
+            redirect_analysis['finalUrl'] or target_url,
+            findings,
+        )
+    except Exception as exc:
+        logger.exception("Failed to analyze sandbox preview: %s", exc)
+        sandbox_preview = {
+            'available': False,
+            'htmlAnalyzed': False,
+            'fetchedUrl': None,
+            'redirectChain': [],
+            'matchedKeywords': [],
+            'fakeLoginForms': [],
+            'suspiciousScripts': [],
+            'hiddenIframes': [],
+            'metaRefreshUrls': [],
+            'dataUriAbuses': [],
+            'sslIssues': [],
+            'missingSecHeaders': [],
+            'redirectIssues': [],
+            'urlEntropyScore': 0.0,
+            'riskScore': 0,
+            'linkXRay': {
+                'forms': [],
+                'externalAssetCount': 0,
+                'hiddenIframesCount': 0,
+                'exfiltrationSinksDetected': [],
+            },
+            'payloadInspection': {
+                'credentialHarvester': {
+                    'isHttpLogin': False,
+                    'hasPasswordInput': False,
+                    'sensitiveInputsFound': [],
+                },
+                'clickjacking': {
+                    'hasClickjackingOverlays': False,
+                    'overlayCount': 0,
+                    'overlays': [],
+                },
+                'web3Drainer': {
+                    'hasWeb3DrainerSignatures': False,
+                    'detectedSignatures': [],
+                },
+                'driveByDownload': {
+                    'isExecutableDownload': False,
+                    'isDoubleExtension': False,
+                    'downloadFilename': None,
+                    'contentType': '',
+                    'autoDownloadAnchors': [],
+                },
+            },
+        }
     infra_analysis = infrastructure_manager.evaluate(
         hostname=hostname,
         registered_domain=registered_domain_full,
