@@ -802,6 +802,20 @@ export default function App() {
     return localStorage.getItem('zeb-theme-pref') || 'system'
   })
 
+  // Mobile Bottom Info Accordions ('fall down' disclosure state)
+  const [mobileOpenSections, setMobileOpenSections] = useState({
+    telemetry: true,
+    methodology: false,
+    faq: false,
+  })
+
+  function toggleMobileSection(key) {
+    setMobileOpenSections(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
+  }
+
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -948,32 +962,34 @@ export default function App() {
           </div>
 
           <div className="nav-actions-cluster">
-            <button
-              type="button"
-              className={`header-nav-link ${currentView === 'inspector' ? 'active' : ''}`}
-              onClick={() => setCurrentView('inspector')}
-              title="URL Threat Inspector"
-            >
-              <span>URL Inspector</span>
-            </button>
+            <nav className="header-links-row" aria-label="Main Navigation">
+              <button
+                type="button"
+                className={`header-nav-link ${currentView === 'inspector' ? 'active' : ''}`}
+                onClick={() => setCurrentView('inspector')}
+                title="URL Threat Inspector"
+              >
+                <span>URL Inspector</span>
+              </button>
 
-            <button
-              type="button"
-              className={`header-nav-link ${currentView === 'developer' ? 'active' : ''}`}
-              onClick={() => setCurrentView('developer')}
-              title="Developer API & Keys Management"
-            >
-              <span>Developer API</span>
-            </button>
+              <button
+                type="button"
+                className={`header-nav-link ${currentView === 'developer' ? 'active' : ''}`}
+                onClick={() => setCurrentView('developer')}
+                title="Developer API & Keys Management"
+              >
+                <span>Developer API</span>
+              </button>
 
-            <button
-              type="button"
-              className="header-nav-link"
-              onClick={() => setShowInfo(true)}
-              title="Inspect checking methodology (?)"
-            >
-              <span>How it works</span>
-            </button>
+              <button
+                type="button"
+                className="header-nav-link"
+                onClick={() => setShowInfo(true)}
+                title="Inspect checking methodology (?)"
+              >
+                <span>How it works</span>
+              </button>
+            </nav>
 
             {/* Cubic 3-Way Theme Switcher with System Adaptation */}
             <ThemeSwitch
@@ -1129,102 +1145,205 @@ export default function App() {
           />
         )}
 
-        {/* Editorial Information Tabs */}
-        <div className="editorial-tabs-bar" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeEditorialTab === 'telemetry'}
-            className={`editorial-tab-btn ${activeEditorialTab === 'telemetry' ? 'active' : ''}`}
-            onClick={() => setActiveEditorialTab('telemetry')}
-          >
-            Engine Specifications
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeEditorialTab === 'methodology'}
-            className={`editorial-tab-btn ${activeEditorialTab === 'methodology' ? 'active' : ''}`}
-            onClick={() => setActiveEditorialTab('methodology')}
-          >
-            Detection Architecture
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeEditorialTab === 'faq'}
-            className={`editorial-tab-btn ${activeEditorialTab === 'faq' ? 'active' : ''}`}
-            onClick={() => setActiveEditorialTab('faq')}
-          >
-            Technical FAQ
-          </button>
+        {/* Bottom Information: Desktop Horizontal Tabs */}
+        <div className="editorial-tabs-desktop">
+          <div className="editorial-tabs-bar" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeEditorialTab === 'telemetry'}
+              className={`editorial-tab-btn ${activeEditorialTab === 'telemetry' ? 'active' : ''}`}
+              onClick={() => setActiveEditorialTab('telemetry')}
+            >
+              Engine Specifications
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeEditorialTab === 'methodology'}
+              className={`editorial-tab-btn ${activeEditorialTab === 'methodology' ? 'active' : ''}`}
+              onClick={() => setActiveEditorialTab('methodology')}
+            >
+              Detection Architecture
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeEditorialTab === 'faq'}
+              className={`editorial-tab-btn ${activeEditorialTab === 'faq' ? 'active' : ''}`}
+              onClick={() => setActiveEditorialTab('faq')}
+            >
+              Technical FAQ
+            </button>
+          </div>
+
+          <div className="editorial-content-pane">
+            {activeEditorialTab === 'telemetry' && (
+              <>
+                <p className="hero-lead-text" style={{ marginBottom: 16 }}>
+                  ZEB v2.4 operates a passive hybrid detection matrix designed to analyze zero-hour attack vectors without local workstation compromise.
+                </p>
+                <div className="engine-check-grid">
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><ShareNetwork size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 1: URL Exposing & De-obfuscation</strong>
+                      <p>Decodes decimal Dword, octal, and hex IP addresses. Unrolls recursive Base64 parameters and traces shortener hops.</p>
+                    </div>
+                  </div>
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><Shield size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 2: Multi-Engine Intelligence</strong>
+                      <p>Consensus arbitration across commercial reputation feeds with zero-panic degradation if external APIs fail.</p>
+                    </div>
+                  </div>
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><Database size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 3: Infrastructure & DNS</strong>
+                      <p>Evaluates Fast-Flux DNS, Autonomous System bulletproof hosting, and TLS certificate age thresholds (&lt;24 hours).</p>
+                    </div>
+                  </div>
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><Code size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 5: Deep DOM & Web3 Sniffer</strong>
+                      <p>Detects unencrypted passwords, clickjacking traps, Permit2 signatures, and dangerous MIME payload traps.</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeEditorialTab === 'methodology' && (
+              <p className="hero-lead-text">
+                Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host.
+              </p>
+            )}
+
+            {activeEditorialTab === 'faq' && (
+              <div className="findings-stream">
+                <div className="finding-row clean">
+                  <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                  <span className="finding-desc">
+                    <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
+                  </span>
+                </div>
+                <div className="finding-row clean">
+                  <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                  <span className="finding-desc">
+                    <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable links or preview cards.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Editorial Tab Contents */}
-        {activeEditorialTab === 'telemetry' && (
-          <div className="editorial-content-pane">
-            <p className="hero-lead-text" style={{ marginBottom: 16 }}>
-              ZEB v2.4 operates a passive hybrid detection matrix designed to analyze zero-hour attack vectors without local workstation compromise.
-            </p>
-            <div className="engine-check-grid">
-              <div className="engine-check-card">
-                <span className="engine-card-icon"><ShareNetwork size={18} weight="bold" /></span>
-                <div className="engine-card-details">
-                  <strong>Pillar 1: URL Exposing & De-obfuscation</strong>
-                  <p>Decodes decimal Dword, octal, and hex IP addresses. Unrolls recursive Base64 parameters and traces shortener hops.</p>
-                </div>
-              </div>
-              <div className="engine-check-card">
-                <span className="engine-card-icon"><Shield size={18} weight="bold" /></span>
-                <div className="engine-card-details">
-                  <strong>Pillar 2: Multi-Engine Intelligence</strong>
-                  <p>Consensus arbitration across commercial reputation feeds with zero-panic degradation if external APIs fail.</p>
-                </div>
-              </div>
-              <div className="engine-check-card">
-                <span className="engine-card-icon"><Database size={18} weight="bold" /></span>
-                <div className="engine-card-details">
-                  <strong>Pillar 3: Infrastructure & DNS</strong>
-                  <p>Evaluates Fast-Flux DNS, Autonomous System bulletproof hosting, and TLS certificate age thresholds (&lt;24 hours).</p>
-                </div>
-              </div>
-              <div className="engine-check-card">
-                <span className="engine-card-icon"><Code size={18} weight="bold" /></span>
-                <div className="engine-card-details">
-                  <strong>Pillar 5: Deep DOM & Web3 Sniffer</strong>
-                  <p>Detects unencrypted passwords, clickjacking traps, Permit2 signatures, and dangerous MIME payload traps.</p>
+        {/* Bottom Information: Mobile Fall-Down Collapsible Accordion */}
+        <div className="editorial-accordion-mobile" role="region" aria-label="Engine specifications and technical details">
+          {/* Accordion Item 1: Engine Specifications */}
+          <div className="editorial-accordion-item">
+            <button
+              type="button"
+              className={`editorial-accordion-header ${mobileOpenSections.telemetry ? 'open' : ''}`}
+              onClick={() => toggleMobileSection('telemetry')}
+              aria-expanded={mobileOpenSections.telemetry}
+            >
+              <span>Engine Specifications</span>
+              <CaretDown size={16} weight="bold" className="accordion-caret" />
+            </button>
+            <div className={`editorial-accordion-body ${mobileOpenSections.telemetry ? 'open' : ''}`}>
+              <div className="editorial-accordion-content">
+                <p className="hero-lead-text" style={{ marginBottom: 14 }}>
+                  ZEB v2.4 operates a passive hybrid detection matrix designed to analyze zero-hour attack vectors without local workstation compromise.
+                </p>
+                <div className="engine-check-grid">
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><ShareNetwork size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 1: URL Exposing & De-obfuscation</strong>
+                      <p>Decodes decimal Dword, octal, and hex IP addresses. Unrolls recursive Base64 parameters and traces shortener hops.</p>
+                    </div>
+                  </div>
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><Shield size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 2: Multi-Engine Intelligence</strong>
+                      <p>Consensus arbitration across commercial reputation feeds with zero-panic degradation if external APIs fail.</p>
+                    </div>
+                  </div>
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><Database size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 3: Infrastructure & DNS</strong>
+                      <p>Evaluates Fast-Flux DNS, Autonomous System bulletproof hosting, and TLS certificate age thresholds (&lt;24 hours).</p>
+                    </div>
+                  </div>
+                  <div className="engine-check-card">
+                    <span className="engine-card-icon"><Code size={18} weight="bold" /></span>
+                    <div className="engine-card-details">
+                      <strong>Pillar 5: Deep DOM & Web3 Sniffer</strong>
+                      <p>Detects unencrypted passwords, clickjacking traps, Permit2 signatures, and dangerous MIME payload traps.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
 
-        {activeEditorialTab === 'methodology' && (
-          <div className="editorial-content-pane">
-            <p className="hero-lead-text">
-              Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host.
-            </p>
-          </div>
-        )}
-
-        {activeEditorialTab === 'faq' && (
-          <div className="editorial-content-pane">
-            <div className="findings-stream">
-              <div className="finding-row clean">
-                <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
-                <span className="finding-desc">
-                  <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
-                </span>
-              </div>
-              <div className="finding-row clean">
-                <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
-                <span className="finding-desc">
-                  <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable links or preview cards.
-                </span>
+          {/* Accordion Item 2: Detection Architecture */}
+          <div className="editorial-accordion-item">
+            <button
+              type="button"
+              className={`editorial-accordion-header ${mobileOpenSections.methodology ? 'open' : ''}`}
+              onClick={() => toggleMobileSection('methodology')}
+              aria-expanded={mobileOpenSections.methodology}
+            >
+              <span>Detection Architecture</span>
+              <CaretDown size={16} weight="bold" className="accordion-caret" />
+            </button>
+            <div className={`editorial-accordion-body ${mobileOpenSections.methodology ? 'open' : ''}`}>
+              <div className="editorial-accordion-content">
+                <p className="hero-lead-text">
+                  Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host.
+                </p>
               </div>
             </div>
           </div>
-        )}
+
+          {/* Accordion Item 3: Technical FAQ */}
+          <div className="editorial-accordion-item">
+            <button
+              type="button"
+              className={`editorial-accordion-header ${mobileOpenSections.faq ? 'open' : ''}`}
+              onClick={() => toggleMobileSection('faq')}
+              aria-expanded={mobileOpenSections.faq}
+            >
+              <span>Technical FAQ</span>
+              <CaretDown size={16} weight="bold" className="accordion-caret" />
+            </button>
+            <div className={`editorial-accordion-body ${mobileOpenSections.faq ? 'open' : ''}`}>
+              <div className="editorial-accordion-content">
+                <div className="findings-stream">
+                  <div className="finding-row clean">
+                    <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                    <span className="finding-desc">
+                      <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
+                    </span>
+                  </div>
+                  <div className="finding-row clean">
+                    <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                    <span className="finding-desc">
+                      <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable links or preview cards.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
           </>
         )}
       </div>
