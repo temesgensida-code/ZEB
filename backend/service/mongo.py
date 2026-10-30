@@ -90,23 +90,118 @@ class MongoDBClient:
             pass
 
 
+# ─── Developer User Management (Google Auth) ───────────────────────────────────
+
+def upsert_dev_user(google_id: str, email: str, name: str = '', picture: str = '') -> dict:
+    """
+    Creates or updates a developer user account authenticated via Google.
+    Returns the user document dictionary with a string ID.
+    """
+    db = MongoDBClient.get_db()
+    email_clean = (email or '').lower().strip()
+    google_id_clean = str(google_id).strip()
+    now = datetime.now(timezone.utc)
+
+    # Search by email or google_id
+    user_doc = db.dev_users.find_one({
+        '$or': [{'email': email_clean}, {'google_id': google_id_clean}]
+    })
+
+    if user_doc:
+        db.dev_users.update_one(
+            {'_id': user_doc['_id']},
+            {
+                '$set': {
+                    'name': name.strip() or user_doc.get('name', ''),
+                    'picture': picture or user_doc.get('picture', ''),
+                    'google_id': google_id_clean,
+                    'last_login': now,
+                    'is_active': True,
+                }
+            }
+        )
+        user_doc['last_login'] = now
+    else:
+        new_doc = {
+            'google_id': google_id_clean,
+            'email': email_clean,
+            'name': name.strip() or email_clean.split('@')[0],
+            'picture': picture or '',
+            'oauth_provider': 'google',
+            'created_at': now,
+            'last_login': now,
+            'is_active': True,
+        }
+        res = db.dev_users.insert_one(new_doc)
+        new_doc['_id'] = res.inserted_id
+        user_doc = new_doc
+
+    return {
+        'id': str(user_doc['_id']),
+        'google_id': user_doc.get('google_id'),
+        'email': user_doc.get('email'),
+        'name': user_doc.get('name'),
+        'picture': user_doc.get('picture'),
+        'created_at': user_doc.get('created_at'),
+        'last_login': user_doc.get('last_login'),
+    }
+
+
+def get_dev_user(user_id_str: str) -> dict | None:
+    """
+    Retrieves a user profile by ID.
+    """
+    db = MongoDBClient.get_db()
+    query = {}
+    if ObjectId.is_valid(user_id_str):
+        query['_id'] = ObjectId(user_id_str)
+    else:
+        query['_id'] = user_id_str
+
+    user_doc = db.dev_users.find_one(query)
+    if not user_doc:
+        return None
+
+    return {
+        'id': str(user_doc['_id']),
+        'google_id': user_doc.get('google_id'),
+        'email': user_doc.get('email'),
+        'name': user_doc.get('name'),
+        'picture': user_doc.get('picture'),
+        'created_at': user_doc.get('created_at'),
+        'last_login': user_doc.get('last_login'),
+    }
+
+
 # ─── API Key Management Functions ─────────────────────────────────────────────
 
-def create_api_key_for_user(user_id: str, key_name: str = 'Default API Key', daily_quota: int = 1000, rate_limit: int = 60) -> tuple[dict, str]:
+def create_api_key_for_user(user_id: str, key_name: str = 'Default API Key', daily_quota: int = 1000, rate_limit: int = 5) -> tuple[dict, str]:
     """
     Generates a secure API key, stores its SHA-256 hash in MongoDB,
     and returns (key_document, raw_plaintext_secret).
-    The raw secret is displayed only once and NEVER stored.
+    Enforces a strict policy of MAXIMUM 1 active API key per user.
     """
     db = MongoDBClient.get_db()
+
+    user_key_match = ObjectId(user_id) if ObjectId.is_valid(user_id) else str(user_id)
+    user_match = [str(user_id)]
+    if ObjectId.is_valid(user_id):
+        user_match.append(ObjectId(user_id))
+
+    # 1. Enforce strict 1 active key per user policy
+    active_count = db.api_keys.count_documents({
+        'user_id': {'$in': user_match},
+        'is_active': True,
+    })
+    if active_count >= 1:
+        raise ValueError("User already has an active API key. Revoke your existing key to generate a new one.")
+
     raw_secret = f"zeb_live_{secrets.token_hex(24)}"
     prefix = raw_secret[:16]
     key_hash = hashlib.sha256(raw_secret.encode('utf-8')).hexdigest()
 
-    user_obj_id = ObjectId(user_id) if ObjectId.is_valid(user_id) else ObjectId()
-
     doc = {
-        'user_id': user_obj_id,
+        'user_id': user_key_match,
         'name': (key_name or 'Default API Key').strip(),
         'key_prefix': prefix,
         'key_hash': key_hash,
@@ -204,10 +299,10 @@ def list_user_keys(user_id: str) -> list[dict]:
     Returns all API keys for a given user, omitting sensitive hashes.
     """
     db = MongoDBClient.get_db()
-    user_obj_id = ObjectId(user_id) if ObjectId.is_valid(user_id) else None
-    query = {'is_active': True}
-    if user_obj_id:
-        query['user_id'] = user_obj_id
+    user_match = [str(user_id)]
+    if ObjectId.is_valid(user_id):
+        user_match.append(ObjectId(user_id))
+    query = {'is_active': True, 'user_id': {'$in': user_match}}
 
     cursor = db.api_keys.find(query, {'key_hash': 0}).sort('created_at', DESCENDING)
     keys = []
@@ -227,8 +322,11 @@ def revoke_api_key(key_id_str: str, user_id: str = None) -> bool:
         return False
 
     query = {'_id': ObjectId(key_id_str)}
-    if user_id and ObjectId.is_valid(user_id):
-        query['user_id'] = ObjectId(user_id)
+    if user_id:
+        user_match = [str(user_id)]
+        if ObjectId.is_valid(user_id):
+            user_match.append(ObjectId(user_id))
+        query['user_id'] = {'$in': user_match}
 
     result = db.api_keys.update_one(query, {'$set': {'is_active': False}})
     return result.modified_count > 0
@@ -272,6 +370,58 @@ def get_key_analytics(key_id_str: str) -> dict:
     # Recent 10 logs
     recent_cursor = db.usage_logs.find(
         {'key_id': key_id},
+        projection={'_id': 0, 'key_id': 0, 'user_id': 0}
+    ).sort('timestamp', DESCENDING).limit(10)
+    recent_logs = list(recent_cursor)
+
+    return {
+        'todayCount': today_count,
+        'dailyHistogram': daily_histogram,
+        'recentLogs': recent_logs,
+    }
+
+
+def get_user_analytics(user_id_str: str) -> dict:
+    """
+    Aggregates user-level request volume, quota consumption, and recent audit logs.
+    """
+    db = MongoDBClient.get_db()
+    if not user_id_str:
+        return {'todayCount': 0, 'dailyHistogram': [], 'recentLogs': []}
+
+    user_match = [str(user_id_str)]
+    if ObjectId.is_valid(user_id_str):
+        user_match.append(ObjectId(user_id_str))
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seven_days_ago = today_start - timedelta(days=7)
+
+    today_count = db.usage_logs.count_documents({
+        'user_id': {'$in': user_match},
+        'timestamp': {'$gte': today_start}
+    })
+
+    try:
+        pipeline = [
+            {'$match': {'user_id': {'$in': user_match}, 'timestamp': {'$gte': seven_days_ago}}},
+            {
+                '$group': {
+                    '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp'}},
+                    'totalRequests': {'$sum': 1},
+                    'avgLatency': {'$avg': '$latency_ms'},
+                    'errors': {'$sum': {'$cond': [{'$gte': ['$response_status', 400]}, 1, 0]}}
+                }
+            },
+            {'$sort': {'_id': 1}}
+        ]
+        daily_histogram = list(db.usage_logs.aggregate(pipeline))
+    except Exception:
+        daily_histogram = []
+
+    # Recent 10 logs for this user
+    recent_cursor = db.usage_logs.find(
+        {'user_id': {'$in': user_match}},
         projection={'_id': 0, 'key_id': 0, 'user_id': 0}
     ).sort('timestamp', DESCENDING).limit(10)
     recent_logs = list(recent_cursor)

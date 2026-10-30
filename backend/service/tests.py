@@ -770,3 +770,148 @@ class SandboxPreviewRegressionTests(TestCase):
         self.assertIn('sandboxPreview', data['structureAnalysis'])
         self.assertIn('payloadInspection', data['structureAnalysis']['sandboxPreview'])
 
+
+class DeveloperAuthAndKeyPolicyTests(TestCase):
+    """
+    Tests for Google OAuth, JWT authentication, and strict 1-key limit enforcement.
+    """
+
+    def setUp(self):
+        from service.mongo import MongoDBClient
+        db = MongoDBClient.get_db()
+        db.dev_users.delete_many({})
+        db.api_keys.delete_many({})
+        db.usage_logs.delete_many({})
+
+    def test_jwt_access_token_creation_and_verification(self):
+        """Verify HMAC-SHA256 JWT tokens create and verify successfully."""
+        from service.auth import create_access_token, verify_access_token
+        token = create_access_token('user_test_1', 'dev@example.com')
+        self.assertIsInstance(token, str)
+        self.assertEqual(token.count('.'), 2)
+
+        payload = verify_access_token(token)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload['sub'], 'user_test_1')
+        self.assertEqual(payload['email'], 'dev@example.com')
+
+        # Tampered token fails
+        tampered = token[:-4] + 'xxxx'
+        self.assertIsNone(verify_access_token(tampered))
+
+        # Expired token fails
+        expired_token = create_access_token('user_test_1', 'dev@example.com', expiry_days=-1)
+        self.assertIsNone(verify_access_token(expired_token))
+
+    def test_google_auth_endpoint_and_user_upsert(self):
+        """POST /api/v1/auth/google/ verifies Google token and returns JWT access token."""
+        resp = self.client.post(
+            '/api/v1/auth/google/',
+            {'idToken': 'mock_token_johndoe@test.com'},
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('accessToken', data)
+        self.assertIn('user', data)
+        self.assertEqual(data['user']['email'], 'johndoe@test.com')
+
+    def test_protected_routes_require_bearer_token(self):
+        """GET /api/v1/auth/me/ and /api/v1/keys/ return 401 when unauthenticated."""
+        # Unauthenticated me
+        resp = self.client.get('/api/v1/auth/me/')
+        self.assertEqual(resp.status_code, 401)
+
+        # Unauthenticated keys list
+        resp = self.client.get('/api/v1/keys/')
+        self.assertEqual(resp.status_code, 401)
+
+        # Unauthenticated key create
+        resp = self.client.post('/api/v1/keys/', {'name': 'Test'}, content_type='application/json')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_single_active_key_enforcement_and_revocation(self):
+        """Verify maximum 1 active key per user policy and revocation behavior."""
+        from service.mongo import upsert_dev_user
+        from service.auth import create_access_token
+
+        user = upsert_dev_user(google_id='gid_101', email='tester@zeb.com', name='Tester')
+        token = create_access_token(user['id'], user['email'])
+        auth_header = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+
+        # 1. Create first key -> should succeed
+        resp1 = self.client.post(
+            '/api/v1/keys/',
+            {'name': 'Primary Key'},
+            content_type='application/json',
+            **auth_header,
+        )
+        self.assertEqual(resp1.status_code, 201)
+        data1 = resp1.json()
+        self.assertIn('rawSecret', data1)
+        self.assertTrue(data1['rawSecret'].startswith('zeb_live_'))
+        self.assertEqual(data1['key']['daily_quota'], 1000)
+        self.assertEqual(data1['key']['rate_limit_per_minute'], 5)
+        key_id = data1['key']['_id']
+
+        # 2. Attempt to create second key -> must fail with 400
+        resp2 = self.client.post(
+            '/api/v1/keys/',
+            {'name': 'Second Key Attempt'},
+            content_type='application/json',
+            **auth_header,
+        )
+        self.assertEqual(resp2.status_code, 400)
+        self.assertIn('already has an active API key', resp2.json().get('error', ''))
+
+        # 3. Check /api/v1/keys/ -> exactly 1 key returned
+        list_resp = self.client.get('/api/v1/keys/', **auth_header)
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertEqual(len(list_resp.json()['keys']), 1)
+
+        # 4. Check /api/v1/auth/me/ -> activeKey is present
+        me_resp = self.client.get('/api/v1/auth/me/', **auth_header)
+        self.assertEqual(me_resp.status_code, 200)
+        self.assertTrue(me_resp.json()['hasActiveKey'])
+        self.assertEqual(me_resp.json()['activeKey']['_id'], key_id)
+
+        # 5. Revoke key -> should succeed
+        revoke_resp = self.client.delete(f'/api/v1/keys/{key_id}/', **auth_header)
+        self.assertEqual(revoke_resp.status_code, 200)
+
+        # 6. Check /api/v1/keys/ -> 0 active keys
+        list_resp_after = self.client.get('/api/v1/keys/', **auth_header)
+        self.assertEqual(len(list_resp_after.json()['keys']), 0)
+
+        # 7. Create new key after revocation -> should succeed
+        resp3 = self.client.post(
+            '/api/v1/keys/',
+            {'name': 'Rotated Key'},
+            content_type='application/json',
+            **auth_header,
+        )
+        self.assertEqual(resp3.status_code, 201)
+        self.assertEqual(resp3.json()['key']['name'], 'Rotated Key')
+
+    def test_user_analytics_tracking(self):
+        """Verify user usage telemetry is returned by /api/v1/usage/ and /api/v1/auth/me/."""
+        from service.mongo import upsert_dev_user, create_api_key_for_user, record_usage_log
+        from service.auth import create_access_token
+
+        user = upsert_dev_user(google_id='gid_202', email='analytics@zeb.com', name='Analytics Dev')
+        key_doc, raw_secret = create_api_key_for_user(user['id'], 'Telemetry Key')
+        token = create_access_token(user['id'], user['email'])
+        auth_header = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+
+        # Log 2 requests
+        record_usage_log(key_doc, 'https://alpha.org', 200, 45)
+        record_usage_log(key_doc, 'https://beta.com', 200, 32)
+
+        # Check /api/v1/usage/
+        resp = self.client.get('/api/v1/usage/', **auth_header)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['todayCount'], 2)
+        self.assertEqual(len(data['recentLogs']), 2)
+
+

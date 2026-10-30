@@ -29,3 +29,5 @@ azure.yaml
 **/.agents/
 skills-lock.json
 **/skills-lock.json
+skills/
+**/skills/

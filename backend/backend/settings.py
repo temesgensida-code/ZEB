@@ -176,3 +176,7 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_HSTS_SECONDS', '31536000'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+
+# Google OAuth Client Configuration
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
