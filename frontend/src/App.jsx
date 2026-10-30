@@ -817,6 +817,17 @@ export default function App() {
   }
 
   const inputRef = useRef(null)
+  const [isScrolled, setIsScrolled] = useState(false)
+
+  // Scroll listener for sticky frosted header
+  useEffect(() => {
+    function handleScroll() {
+      setIsScrolled(window.scrollY > 15)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
@@ -946,10 +957,9 @@ export default function App() {
       {showSafePreview && <SafePreviewModal result={result} onClose={() => setShowSafePreview(false)} />}
       {showExportModal && <ReportExportModal result={result} onClose={() => setShowExportModal(false)} />}
 
-      {/* Cardless Layout Shell */}
-      <div className="layout-shell">
-        {/* Navigation Bar */}
-        <header className="top-nav-bar">
+      {/* Full-Width Sticky Frosted Navigation Header */}
+      <header className={`sticky-nav-header ${isScrolled ? 'is-scrolled' : ''}`}>
+        <div className="sticky-nav-inner">
           <div className="brand-lockup">
             <div className="brand-glyph-prefix" aria-hidden="true">
               <Shield size={22} weight="bold" />
@@ -997,8 +1007,11 @@ export default function App() {
               onSelectTheme={setThemePreference}
             />
           </div>
-        </header>
+        </div>
+      </header>
 
+      {/* Cardless Layout Shell */}
+      <div className="layout-shell">
         {currentView === 'developer' ? (
           <DeveloperPortal onBackToInspector={() => setCurrentView('inspector')} />
         ) : (
