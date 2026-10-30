@@ -146,6 +146,12 @@
 .nav-actions-cluster {
   display: flex;
   align-items: center;
+  gap: 20px;
+}
+
+.header-links-row {
+  display: flex;
+  align-items: center;
   gap: 16px;
 }
 
@@ -158,7 +164,7 @@
   background: transparent;
   border: none;
   box-shadow: none;
-  padding: 6px 2px;
+  padding: 6px 4px;
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 0.8125rem;
@@ -209,7 +215,7 @@
   border-radius: var(--radius-xs);
   padding: 2px;
   gap: 2px;
-  box-shadow: var(--btn-shadow);
+  box-shadow: none;
   user-select: none;
 }
 
