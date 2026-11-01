@@ -80,7 +80,19 @@
 }
 
 .mech-btn-primary:hover {
-  filter: brightness(0.9);
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: var(--btn-primary-border);
+  opacity: 0.9;
+  filter: none;
+}
+
+.mech-btn-primary:active {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: var(--btn-primary-border);
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 transparent;
 }
 
 /* ─── Fixed Frosted Header ────────────────────────────────────────────────── */
