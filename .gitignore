@@ -31,3 +31,7 @@ skills-lock.json
 **/skills-lock.json
 skills/
 **/skills/
+
+# Benchmark generated reports and CSV metrics
+benchmark/reports/*.html
+benchmark/reports/*.csv

@@ -24,6 +24,7 @@ import re
 import socket
 import ssl
 import unicodedata
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
@@ -396,7 +397,11 @@ def audit_dom_forms(soup: BeautifulSoup, page_url: str, findings: list) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
-def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
+def analyze_sandbox_preview(
+    preview_url: str,
+    findings: list,
+    telemetry: dict | None = None,
+) -> dict:
     """
     Fetch *preview_url* passively and run a battery of static safety checks.
 
@@ -407,6 +412,8 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     findings : list
         Mutable list; finding dicts are appended in-place so callers can
         accumulate findings across multiple checks.
+    telemetry : dict | None
+        Optional dictionary to record fine-grained I/O and CPU timings.
 
     Returns
     -------
@@ -464,8 +471,11 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     # ------------------------------------------------------------------
     ssl_issues: list[dict] = []
     if input_host and parsed_input.scheme == 'https':
+        t_ssl_start = time.perf_counter()
         port = parsed_input.port or 443
         ssl_issues = _check_ssl_certificate(input_host, port)
+        if telemetry is not None:
+            telemetry['io_sandbox_ssl_ms'] = (time.perf_counter() - t_ssl_start) * 1000
         if ssl_issues:
             findings.append({
                 'type': 'SANDBOX_SSL_ISSUE',
@@ -479,6 +489,7 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     # ------------------------------------------------------------------
     # 3. Fetch the page
     # ------------------------------------------------------------------
+    t_get_start = time.perf_counter()
     try:
         response = requests.get(
             preview_url,
@@ -489,7 +500,11 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
                 'Accept': 'text/html,application/xhtml+xml',
             },
         )
+        if telemetry is not None:
+            telemetry['io_sandbox_http_ms'] = (time.perf_counter() - t_get_start) * 1000
     except requests.RequestException as exc:
+        if telemetry is not None:
+            telemetry['io_sandbox_http_ms'] = (time.perf_counter() - t_get_start) * 1000
         findings.append({
             'type': 'SANDBOX_PREVIEW_UNAVAILABLE',
             'flagged': False,
@@ -641,6 +656,7 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     # ------------------------------------------------------------------
     # 7. Parse HTML
     # ------------------------------------------------------------------
+    t_dom_start = time.perf_counter()
     html = response.text[:SANDBOX_HTML_LIMIT]
     soup = BeautifulSoup(html, 'html.parser')
     page_text = soup.get_text(' ', strip=True).lower()
@@ -837,6 +853,9 @@ def analyze_sandbox_preview(preview_url: str, findings: list) -> dict:
     # 15. Aggregate risk score
     # ------------------------------------------------------------------
     risk_score = _compute_risk_score(findings)
+
+    if telemetry is not None:
+        telemetry['cpu_dom_analysis_ms'] = (time.perf_counter() - t_dom_start) * 1000
 
     return {
         'available': True,

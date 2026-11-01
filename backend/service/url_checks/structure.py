@@ -1,4 +1,5 @@
 import logging
+import time
 import unicodedata
 from urllib.parse import urlparse
 
@@ -111,7 +112,8 @@ def analyze_idn_homographs(hostname: str) -> dict:
     }
 
 
-def analyze_url_structure(target_url: str) -> dict:
+def analyze_url_structure(target_url: str, telemetry: dict | None = None) -> dict:
+    t_struct_cpu_start = time.perf_counter()
     parsed = urlparse(target_url)
     hostname = (parsed.hostname or '').lower()
 
@@ -227,12 +229,24 @@ def analyze_url_structure(target_url: str) -> dict:
             }
         )
 
+    if telemetry is not None:
+        telemetry['cpu_structure_ms'] = (time.perf_counter() - t_struct_cpu_start) * 1000
+
+    t_whois0 = time.perf_counter()
     domain_age = analyze_domain_age(registered_domain_full, findings)
+    if telemetry is not None:
+        telemetry['io_whois_ms'] = (time.perf_counter() - t_whois0) * 1000
+
+    t_redir0 = time.perf_counter()
     redirect_analysis = analyze_redirect_chain(target_url, registered_domain_full, findings)
+    if telemetry is not None:
+        telemetry['io_redirect_ms'] = (time.perf_counter() - t_redir0) * 1000
+
     try:
         sandbox_preview = analyze_sandbox_preview(
             redirect_analysis['finalUrl'] or target_url,
             findings,
+            telemetry=telemetry,
         )
     except Exception as exc:
         logger.exception("Failed to analyze sandbox preview: %s", exc)
@@ -282,6 +296,7 @@ def analyze_url_structure(target_url: str) -> dict:
                 },
             },
         }
+    t_infra0 = time.perf_counter()
     infra_analysis = infrastructure_manager.evaluate(
         hostname=hostname,
         registered_domain=registered_domain_full,
@@ -289,11 +304,17 @@ def analyze_url_structure(target_url: str) -> dict:
         matched_brand=typosquatting_match,
         findings=findings,
     )
+    if telemetry is not None:
+        telemetry['io_infra_ms'] = (time.perf_counter() - t_infra0) * 1000
+
+    t_dyn0 = time.perf_counter()
     dynamic_sandbox = dynamic_sandbox_manager.evaluate(
         target_url=target_url,
         registered_domain=registered_domain_full,
         findings=findings,
     )
+    if telemetry is not None:
+        telemetry['dynamic_sandbox_ms'] = (time.perf_counter() - t_dyn0) * 1000
 
     if not findings:
         findings.append(
@@ -307,7 +328,7 @@ def analyze_url_structure(target_url: str) -> dict:
             }
         )
 
-    return {
+    res = {
         'isIpBased': has_ip_host,
         'hasSuspiciousTld': is_suspicious_tld,
         'hasTyposquattingSignal': has_typosquatting_signal,
@@ -339,3 +360,6 @@ def analyze_url_structure(target_url: str) -> dict:
         'dynamicSandbox': dynamic_sandbox,
         'findings': findings,
     }
+    if telemetry is not None:
+        res['_telemetry'] = telemetry
+    return res

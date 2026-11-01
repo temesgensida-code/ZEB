@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 from urllib.parse import urlparse
 
@@ -221,10 +222,12 @@ class UrlSafetyCheckView(APIView):
 	permission_classes = [AllowAny]
 
 	def post(self, request):
+		t_view_start = time.perf_counter()
 		raw_url = request.data.get('url', '')
 		session_id = request.data.get('sessionId') or str(uuid.uuid4())
 
 		# ── Stage 1: Validate & Re-fang ──────────────────────────────────────
+		t_cpu0 = time.perf_counter()
 		set_progress(session_id, 'Validating URL format...')
 		refanged_raw = refang_url(raw_url)
 		is_defanged = raw_url.strip() != refanged_raw.strip()
@@ -235,34 +238,40 @@ class UrlSafetyCheckView(APIView):
 		parsed = urlparse(target_url)
 		if not parsed.scheme or not parsed.netloc:
 			cleanup_progress(session_id)
-			return Response(
+			total_ms = (time.perf_counter() - t_view_start) * 1000
+			resp = Response(
 				{'error': 'Please provide a valid URL (e.g. https://example.com or bit.ly/abc).'},
 				status=status.HTTP_400_BAD_REQUEST,
 			)
+			resp['X-Time-Total-Ms'] = f"{total_ms:.2f}"
+			resp['X-Time-Network-IO-Ms'] = "0.00"
+			resp['X-Time-CPU-Ms'] = f"{total_ms:.2f}"
+			return resp
 
 		is_shortener = _is_shortener_url(target_url)
+		cpu_stage1_ms = (time.perf_counter() - t_cpu0) * 1000
 
 		# ── Stage 2: Multi-Engine Threat Intelligence ─────────────────────────
 		set_progress(session_id, 'Querying multi-engine threat intelligence feeds...')
+		t_ti0 = time.perf_counter()
 		ti_result = threat_intel_manager.evaluate(target_url)
+		threat_intel_io_ms = (time.perf_counter() - t_ti0) * 1000
 		threats = ti_result.get('threatTypes', [])
 
-		# ── Stage 3: URL structure ────────────────────────────────────────────
+		# ── Stage 3-7: URL structure, domain age, redirects, sandbox preview ──
 		set_progress(session_id, 'Analyzing URL structure...')
-
-		# ── Stage 4: Domain age (triggered inside analyze_url_structure) ──────
 		set_progress(session_id, 'Checking domain age via WHOIS...')
-
-		# ── Stage 5: Redirect chain ────────────────────────────────────────────
 		set_progress(session_id, 'Following redirect chain...')
-
-		# ── Stage 6: Sandbox preview ───────────────────────────────────────────
 		set_progress(session_id, 'Running sandbox page analysis...')
 
-		structure_analysis = analyze_url_structure(target_url)
+		telemetry = {}
+		structure_analysis = analyze_url_structure(target_url, telemetry=telemetry)
 
+		# ── Stage 8: Verdict & Exposure ───────────────────────────────────────
+		t_scoring0 = time.perf_counter()
 		verdict, message = _build_verdict(ti_result, structure_analysis)
 		url_exposure = _build_url_exposure(raw_url, target_url, structure_analysis, original_input_type)
+		scoring_cpu_ms = (time.perf_counter() - t_scoring0) * 1000
 
 		mark_complete(session_id)
 		cleanup_progress(session_id)
@@ -282,8 +291,42 @@ class UrlSafetyCheckView(APIView):
 			'sessionId': session_id,
 		}
 
+		total_ms = (time.perf_counter() - t_view_start) * 1000
+		network_io_ms = (
+			threat_intel_io_ms +
+			telemetry.get('io_whois_ms', 0.0) +
+			telemetry.get('io_redirect_ms', 0.0) +
+			telemetry.get('io_sandbox_ssl_ms', 0.0) +
+			telemetry.get('io_sandbox_http_ms', 0.0) +
+			telemetry.get('io_infra_ms', 0.0)
+		)
+		cpu_ms = (
+			cpu_stage1_ms +
+			telemetry.get('cpu_structure_ms', 0.0) +
+			telemetry.get('cpu_dom_analysis_ms', 0.0) +
+			telemetry.get('dynamic_sandbox_ms', 0.0) +
+			scoring_cpu_ms
+		)
+
+		breakdown_parts = [
+			f"ti={threat_intel_io_ms:.1f}ms",
+			f"whois={telemetry.get('io_whois_ms', 0.0):.1f}ms",
+			f"redirect={telemetry.get('io_redirect_ms', 0.0):.1f}ms",
+			f"sandbox_ssl={telemetry.get('io_sandbox_ssl_ms', 0.0):.1f}ms",
+			f"sandbox_http={telemetry.get('io_sandbox_http_ms', 0.0):.1f}ms",
+			f"infra={telemetry.get('io_infra_ms', 0.0):.1f}ms",
+			f"cpu_struct={telemetry.get('cpu_structure_ms', 0.0):.1f}ms",
+			f"cpu_dom={telemetry.get('cpu_dom_analysis_ms', 0.0):.1f}ms",
+			f"scoring={scoring_cpu_ms:.1f}ms",
+		]
+		breakdown_str = ';'.join(breakdown_parts)
+
 		response = Response(response_data, status=status.HTTP_200_OK)
 		response['X-Session-ID'] = session_id
+		response['X-Time-Total-Ms'] = f"{total_ms:.2f}"
+		response['X-Time-Network-IO-Ms'] = f"{network_io_ms:.2f}"
+		response['X-Time-CPU-Ms'] = f"{cpu_ms:.2f}"
+		response['X-Time-Breakdown'] = breakdown_str
 		return response
 
 

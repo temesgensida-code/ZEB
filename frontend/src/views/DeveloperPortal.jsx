@@ -249,7 +249,13 @@ export function DeveloperPortal({ onBackToInspector }) {
   const activeKey = keys.length > 0 ? keys[0] : null
   const displaySecret = justCreatedSecret || (activeKey ? `${activeKey.key_prefix}...` : 'zeb_live_your_api_key_here')
 
-  const curlSnippet = `curl -X POST https://zeb.security/api/v1/scan \\
+  const defaultApiHost = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+    ? 'http://127.0.0.1:8000'
+    : 'https://zeb-48t0.onrender.com'
+  const resolvedApiHost = apiBaseUrl || defaultApiHost
+  const scanEndpointUrl = `${resolvedApiHost}/api/v1/scan`
+
+  const curlSnippet = `curl -X POST ${scanEndpointUrl} \\
   -H "X-API-Key: ${displaySecret}" \\
   -H "Content-Type: application/json" \\
   -d '{"url": "https://suspicious-target.xyz/login"}'`
@@ -262,7 +268,7 @@ headers = {
 }
 
 payload = {"url": "https://suspicious-target.xyz/login"}
-response = requests.post("https://zeb.security/api/v1/scan", headers=headers, json=payload)
+response = requests.post("${scanEndpointUrl}", headers=headers, json=payload)
 print(response.json())`
 
   const todayCount = usageStats?.todayCount ?? 0

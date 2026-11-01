@@ -60,13 +60,33 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', True)
 
+from corsheaders.defaults import default_headers
+
 ALLOWED_HOSTS = env_list(
     'DJANGO_ALLOWED_HOSTS',
     ['localhost', '127.0.0.1', 'testserver', '.onrender.com'],
 )
-CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', [])
-CORS_ALLOWED_ORIGINS = env_list('DJANGO_CORS_ALLOWED_ORIGINS', [])
-CORS_ALLOW_CREDENTIALS = env_bool('DJANGO_CORS_ALLOW_CREDENTIALS', False)
+CSRF_TRUSTED_ORIGINS = env_list(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    ['https://*.onrender.com', 'https://*.vercel.app'],
+)
+CORS_ALLOWED_ORIGINS = env_list(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+    [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'http://localhost:3000',
+        'https://zeb-indol.vercel.app',
+    ],
+)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https:\/\/.*\.vercel\.app$',
+]
+CORS_ALLOW_CREDENTIALS = env_bool('DJANGO_CORS_ALLOW_CREDENTIALS', True)
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-api-key',
+    'x-session-id',
+]
 
 
 # Application definition
