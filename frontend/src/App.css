@@ -403,6 +403,7 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-xs);
   padding: 8px 12px;
+  margin: 6px 0;
   box-shadow: var(--btn-shadow);
   transition: border-color 0.15s ease;
 }
@@ -416,43 +417,43 @@
 /* 4 L-shaped corner reticles blinking smoothly in 1.75s interval */
 .input-corner-reticle {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   pointer-events: none;
   z-index: 2;
   animation: cornerBlink 1.75s ease-in-out infinite;
 }
 
 .input-corner-reticle.corner-tl {
-  top: -3px;
-  left: -3px;
+  top: -7px;
+  left: -7px;
   border-top: 2px solid var(--text-primary);
   border-left: 2px solid var(--text-primary);
-  border-top-left-radius: 4px;
+  border-top-left-radius: 0;
 }
 
 .input-corner-reticle.corner-tr {
-  top: -3px;
-  right: -3px;
+  top: -7px;
+  right: -7px;
   border-top: 2px solid var(--text-primary);
   border-right: 2px solid var(--text-primary);
-  border-top-right-radius: 4px;
+  border-top-right-radius: 0;
 }
 
 .input-corner-reticle.corner-bl {
-  bottom: -3px;
-  left: -3px;
+  bottom: -7px;
+  left: -7px;
   border-bottom: 2px solid var(--text-primary);
   border-left: 2px solid var(--text-primary);
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: 0;
 }
 
 .input-corner-reticle.corner-br {
-  bottom: -3px;
-  right: -3px;
+  bottom: -7px;
+  right: -7px;
   border-bottom: 2px solid var(--text-primary);
   border-right: 2px solid var(--text-primary);
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 0;
 }
 
 @keyframes cornerBlink {
