@@ -957,9 +957,9 @@ export default function App() {
       {showSafePreview && <SafePreviewModal result={result} onClose={() => setShowSafePreview(false)} />}
       {showExportModal && <ReportExportModal result={result} onClose={() => setShowExportModal(false)} />}
 
-      {/* Full-Width Sticky Frosted Navigation Header */}
-      <header className={`sticky-nav-header ${isScrolled ? 'is-scrolled' : ''}`}>
-        <div className="sticky-nav-inner">
+      {/* Full-Width Fixed Frosted Navigation Header */}
+      <header className={`fixed-nav-header ${isScrolled ? 'is-scrolled' : ''}`}>
+        <div className="fixed-nav-inner">
           <div className="brand-lockup">
             <div className="brand-glyph-prefix" aria-hidden="true">
               <Shield size={22} weight="bold" />

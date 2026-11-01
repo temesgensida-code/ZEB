@@ -41,7 +41,7 @@
   z-index: 1;
   max-width: 980px;
   margin: 0 auto;
-  padding: 12px 20px 80px 20px;
+  padding: 80px 20px 80px 20px;
 }
 
 /* ─── Mechanical Button Physics ────────────────────────────────────────────── */
@@ -83,9 +83,9 @@
   filter: brightness(0.9);
 }
 
-/* ─── Sticky Frosted Header ──────────────────────────────────────────────── */
-.sticky-nav-header {
-  position: sticky;
+/* ─── Fixed Frosted Header ────────────────────────────────────────────────── */
+.fixed-nav-header {
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -96,7 +96,7 @@
   transition: background-color 0.25s ease, -webkit-backdrop-filter 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease;
 }
 
-.sticky-nav-header.is-scrolled {
+.fixed-nav-header.is-scrolled {
   background-color: rgba(255, 255, 255, 0.75);
   background-color: color-mix(in srgb, var(--bg-page) 75%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
@@ -104,22 +104,22 @@
   border-bottom-color: var(--border-muted);
 }
 
-[data-theme="dark"] .sticky-nav-header.is-scrolled {
+[data-theme="dark"] .fixed-nav-header.is-scrolled {
   background-color: rgba(10, 10, 10, 0.75);
   background-color: color-mix(in srgb, var(--bg-page) 75%, transparent);
 }
 
-.sticky-nav-inner {
+.fixed-nav-inner {
   max-width: 980px;
   margin: 0 auto;
-  padding: 20px 20px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: padding 0.25s ease;
+  transition: padding 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sticky-nav-header.is-scrolled .sticky-nav-inner {
+.fixed-nav-header.is-scrolled .fixed-nav-inner {
   padding: 12px 20px;
 }
 
@@ -129,6 +129,21 @@
   gap: 10px;
   text-decoration: none;
   user-select: none;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: left center;
+}
+
+.fixed-nav-header.is-scrolled .brand-lockup {
+  transform: scale(0.88);
+}
+
+.fixed-nav-header.is-scrolled .header-links-row {
+  gap: 12px;
+}
+
+.fixed-nav-header.is-scrolled .header-nav-link {
+  font-size: 0.75rem;
+  padding: 4px 4px;
 }
 
 .brand-glyph-prefix {
@@ -247,6 +262,12 @@
   gap: 2px;
   box-shadow: none;
   user-select: none;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fixed-nav-header.is-scrolled .theme-switch-cubic-shell {
+  transform: scale(0.9);
+  transform-origin: right center;
 }
 
 .theme-switch-cubic-slider {
@@ -2019,21 +2040,29 @@
 }
 
 @media (max-width: 640px) {
+  .layout-shell {
+    padding-top: 100px;
+  }
+
   /* Navigation Bar: 2-Tier Mobile Grid */
-  .sticky-nav-inner {
+  .fixed-nav-inner {
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas:
       "brand theme"
       "links links";
-    row-gap: 12px;
+    row-gap: 10px;
     column-gap: 12px;
-    padding: 14px 16px;
+    padding: 12px 16px;
   }
 
-  .sticky-nav-header.is-scrolled .sticky-nav-inner {
-    row-gap: 8px;
-    padding: 10px 16px;
+  .fixed-nav-header.is-scrolled .fixed-nav-inner {
+    row-gap: 6px;
+    padding: 8px 14px;
+  }
+
+  .fixed-nav-header.is-scrolled .brand-lockup {
+    transform: scale(0.88);
   }
 
   .brand-lockup {
