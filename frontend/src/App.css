@@ -904,136 +904,30 @@
   color: var(--text-muted);
 }
 
-/* ─── Editorial System Documentation Dropdown ─────────────────────────────── */
-.editorial-dropdown-wrapper {
-  margin-top: 36px;
+/* ─── Technical "How It Works" Modal Dialog ────────────────────────────────── */
+.modal-info-dialog {
+  max-width: 760px;
+}
+
+.modal-content-group {
   margin-bottom: 24px;
-  position: relative;
 }
 
-.editorial-dropdown-header-row {
+.modal-content-group:last-child {
+  margin-bottom: 0;
+}
+
+.modal-group-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-muted);
-  margin-bottom: 18px;
-  flex-wrap: wrap;
-}
-
-.editorial-dropdown-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.editorial-dropdown-anchor {
-  position: relative;
-}
-
-.editorial-dropdown-trigger {
-  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
   font-family: var(--font-sans);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
-  background-color: var(--bg-page);
-  border: 1.5px solid var(--border-primary);
-  border-radius: var(--radius-xs);
-  box-shadow: var(--btn-shadow);
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.06s ease;
-}
-
-.editorial-dropdown-trigger:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 transparent;
-}
-
-.editorial-dropdown-trigger:hover {
-  background-color: var(--bg-inset);
-}
-
-.dropdown-active-label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.dropdown-caret {
-  color: var(--text-muted);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
-}
-
-.dropdown-caret.open {
-  transform: rotate(180deg);
-  color: var(--text-primary);
-}
-
-.editorial-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 230px;
-  background-color: var(--bg-page);
-  border: 1.5px solid var(--border-primary);
-  box-shadow: var(--btn-shadow);
-  border-radius: var(--radius-xs);
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-}
-
-.editorial-dropdown-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  font-family: var(--font-sans);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  background: transparent;
-  border: none;
-  border-radius: 2px;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 0.12s ease;
-}
-
-.editorial-dropdown-item:hover {
-  background-color: var(--bg-inset);
-}
-
-.editorial-dropdown-item.active {
-  font-weight: 700;
-  background-color: var(--bg-inset);
-}
-
-.editorial-content-pane {
-  animation: fadeInPane 0.2s ease-out;
-}
-
-@keyframes fadeInPane {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 
@@ -2169,28 +2063,6 @@
   /* Layout Shell */
   .layout-shell {
     padding: 16px 14px 60px 14px;
-  }
-
-  /* Editorial Documentation Dropdown Mobile */
-  .editorial-dropdown-header-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .editorial-dropdown-anchor {
-    width: 100%;
-  }
-
-  .editorial-dropdown-trigger {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .editorial-dropdown-menu {
-    width: 100%;
-    left: 0;
-    right: 0;
   }
 
   /* Engine Check Grid in Accordion / Modals */

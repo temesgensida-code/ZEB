@@ -46,38 +46,38 @@ import { defangUrl } from './utils/stixGenerator'
 const STAGES = [
   {
     key: 'validating',
-    label: 'Validating URL',
-    detail: 'Sanitising address format, stripping tracking parameters, and resolving host protocols.',
+    label: 'URL Exposure & De-obfuscation',
+    detail: 'Decodes decimal Dword, octal, and hex IP notations. Strips tracking telemetry, unrolls recursive Base64 parameters, and normalizes URI schemes.',
     icon: <MagnifyingGlass size={16} weight="bold" />,
   },
   {
     key: 'safe_browsing',
     label: 'Multi-Engine Threat Feeds',
-    detail: 'Querying global databases for known malware distributions, phishing vectors, and malicious feeds.',
+    detail: 'Consensus arbitration across commercial reputation feeds and zero-hour threat databases with zero-panic degradation if external APIs fail.',
     icon: <Shield size={16} weight="bold" />,
   },
   {
     key: 'structure',
     label: 'Structure & Homographs',
-    detail: 'Inspecting hostname entropy, IP-based routing, Unicode confusables, and typosquatting impersonation.',
+    detail: 'Evaluates character Shannon entropy, Unicode TR39 confusable scripts, RFC 3986 userinfo credential traps, and visual typosquatting impersonation.',
     icon: <ShareNetwork size={16} weight="bold" />,
   },
   {
     key: 'infrastructure',
-    label: 'Infrastructure & DNS',
-    detail: 'Querying Bulletproof ASNs, Fast-Flux nameserver volatility, and TLS certificate issuance recency.',
+    label: 'Infrastructure & DNS Topology',
+    detail: 'Detects Fast-Flux nameserver volatility, Autonomous System (ASN) bulletproof hosting networks, and TLS certificate age thresholds (<24 hours).',
     icon: <Database size={16} weight="bold" />,
   },
   {
     key: 'redirect',
-    label: 'Redirect Chain',
-    detail: 'Tracing HTTP redirect hops, resolving obfuscated shorteners, and identifying protocol downgrades.',
+    label: 'Redirect Chain & Protocol Integrity',
+    detail: 'Traces full HTTP redirect hops, resolves cloaked link shorteners, and alerts on cross-origin transitions or HTTPS → HTTP protocol downgrades.',
     icon: <Pulse size={16} weight="bold" />,
   },
   {
     key: 'sandbox',
-    label: 'DOM & Web3 Sandbox',
-    detail: 'Auditing forms, Permit2 crypto signatures, Telegram exfiltration sinks, and drive-by download traps.',
+    label: 'Deep DOM & Web3 Sniffer',
+    detail: 'Passively audits HTML forms, clickjacking transparent overlays, Web3 Permit2 signatures, Telegram exfiltration sinks, and dangerous payload traps.',
     icon: <Code size={16} weight="bold" />,
   },
 ]
@@ -85,7 +85,7 @@ const STAGES = [
 function stageKeyFromLabel(label) {
   if (!label) return null
   const l = label.toLowerCase()
-  if (l.includes('validat')) return 'validating'
+  if (l.includes('validat') || l.includes('expos') || l.includes('de-obfusc')) return 'validating'
   if (l.includes('safe browsing') || l.includes('google') || l.includes('threat')) return 'safe_browsing'
   if (l.includes('structure') || l.includes('homograph')) return 'structure'
   if (l.includes('domain age') || l.includes('whois') || l.includes('infrastruct') || l.includes('dns')) return 'infrastructure'
@@ -221,11 +221,14 @@ function InfoModal({ onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+      <div className="modal-dialog modal-info-dialog" onClick={e => e.stopPropagation()}>
         <div className="modal-header-section">
           <div className="modal-title-lockup">
             <Shield size={20} weight="bold" />
-            <h2 id="modal-title" className="modal-heading-text">How ZEB Inspects Links</h2>
+            <div>
+              <h2 id="modal-title" className="modal-heading-text">How ZEB Inspects Links</h2>
+              <span className="sandbox-isolation-badge">PASSIVE HYBRID DETECTION MATRIX V2.4</span>
+            </div>
           </div>
           <button type="button" className="mech-btn modal-close-btn" onClick={onClose} aria-label="Close modal">
             <X size={16} weight="bold" />
@@ -233,24 +236,61 @@ function InfoModal({ onClose }) {
         </div>
 
         <div className="modal-body-section">
-          <p className="modal-lead-paragraph">
-            ZEB employs a multi-tiered security pipeline combining real-time commercial threat feeds with passive heuristic and network analysis. Each engine evaluates distinct attack surfaces before rendering a consolidated verdict.
-          </p>
-
-          <div className="engine-check-grid">
-            {STAGES.map(s => (
-              <div key={s.key} className="engine-check-card">
-                <span className="engine-card-icon">{s.icon}</span>
-                <div className="engine-card-details">
-                  <strong>{s.label}</strong>
-                  <p>{s.detail}</p>
-                </div>
-              </div>
-            ))}
+          {/* Section 1: Detection Architecture & Zero-Hour Philosophy */}
+          <div className="modal-content-group">
+            <div className="modal-group-header">
+              <ShieldCheck size={16} weight="bold" />
+              <span>Detection Architecture & Zero-Hour Philosophy</span>
+            </div>
+            <p className="modal-lead-paragraph">
+              Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host. All evaluations occur passively in isolated backend workers without compromising your workstation.
+            </p>
           </div>
 
-          <div className="modal-safety-notice">
-            <strong>Passive Sandbox Guarantee:</strong> ZEB evaluates URLs and DOM markup in isolated cloud containers without executing untrusted scripts on your workstation, keeping your browser insulated from zero-day exploits.
+          {/* Section 2: 6-Stage Security Inspection Engines */}
+          <div className="modal-content-group">
+            <div className="modal-group-header">
+              <Code size={16} weight="bold" />
+              <span>6-Stage Security Inspection Engines</span>
+            </div>
+            <div className="engine-check-grid">
+              {STAGES.map(s => (
+                <div key={s.key} className="engine-check-card">
+                  <span className="engine-card-icon">{s.icon}</span>
+                  <div className="engine-card-details">
+                    <strong>{s.label}</strong>
+                    <p>{s.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 3: Technical FAQ & Safety Guarantees */}
+          <div className="modal-content-group">
+            <div className="modal-group-header">
+              <CheckCircle size={16} weight="bold" />
+              <span>Technical FAQ & Safety Guarantees</span>
+            </div>
+
+            <div className="modal-safety-notice" style={{ marginBottom: 16 }}>
+              <strong>Passive Sandbox Guarantee:</strong> ZEB evaluates URLs and DOM markup in isolated cloud containers without executing untrusted scripts on your workstation, keeping your local browser insulated from zero-day exploits.
+            </div>
+
+            <div className="findings-stream">
+              <div className="finding-row clean">
+                <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                <span className="finding-desc">
+                  <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All HTTP fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
+                </span>
+              </div>
+              <div className="finding-row clean">
+                <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
+                <span className="finding-desc">
+                  <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable preview cards or trigger accidental clicks.
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -784,11 +824,7 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
   )
 }
 
-const EDITORIAL_SECTIONS = [
-  { id: 'telemetry', label: 'Engine Specifications' },
-  { id: 'methodology', label: 'Detection Architecture' },
-  { id: 'faq', label: 'Technical FAQ' },
-]
+
 
 // ─── Main Application Console Root ───────────────────────────────────────────
 export default function App() {
@@ -802,27 +838,12 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [currentStage, setCurrentStage] = useState('')
   const [sessionId, setSessionId] = useState(null)
-  const [activeEditorialTab, setActiveEditorialTab] = useState('telemetry') // 'telemetry' | 'methodology' | 'faq'
   const [currentView, setCurrentView] = useState('inspector') // 'inspector' | 'developer'
 
   // Pure Monochrome Theme & System Adaptation: defaults to system or saved preference
   const [themePreference, setThemePreference] = useState(() => {
     return localStorage.getItem('zeb-theme-pref') || 'system'
   })
-
-  // Bottom Documentation Dropdown state
-  const [editorialDropdownOpen, setEditorialDropdownOpen] = useState(false)
-  const editorialDropdownRef = useRef(null)
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (editorialDropdownRef.current && !editorialDropdownRef.current.contains(event.target)) {
-        setEditorialDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   const inputRef = useRef(null)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -1167,110 +1188,7 @@ export default function App() {
           />
         )}
 
-        {/* Bottom Information: Interactive Documentation Dropdown */}
-        <div className="editorial-dropdown-wrapper" ref={editorialDropdownRef}>
-          <div className="editorial-dropdown-header-row">
-            <span className="editorial-dropdown-eyebrow">DOCUMENTATION & ARCHITECTURE</span>
-            <div className="editorial-dropdown-anchor">
-              <button
-                type="button"
-                className="editorial-dropdown-trigger"
-                onClick={() => setEditorialDropdownOpen(prev => !prev)}
-                aria-expanded={editorialDropdownOpen}
-                aria-haspopup="listbox"
-              >
-                <span className="dropdown-active-label">
-                  {(EDITORIAL_SECTIONS.find(s => s.id === activeEditorialTab) || EDITORIAL_SECTIONS[0]).label}
-                </span>
-                <CaretDown size={14} weight="bold" className={`dropdown-caret ${editorialDropdownOpen ? 'open' : ''}`} />
-              </button>
 
-              {editorialDropdownOpen && (
-                <div className="editorial-dropdown-menu" role="listbox">
-                  {EDITORIAL_SECTIONS.map(section => (
-                    <button
-                      key={section.id}
-                      type="button"
-                      role="option"
-                      aria-selected={activeEditorialTab === section.id}
-                      className={`editorial-dropdown-item ${activeEditorialTab === section.id ? 'active' : ''}`}
-                      onClick={() => {
-                        setActiveEditorialTab(section.id)
-                        setEditorialDropdownOpen(false)
-                      }}
-                    >
-                      <span>{section.label}</span>
-                      {activeEditorialTab === section.id && <Check size={14} weight="bold" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="editorial-content-pane">
-            {activeEditorialTab === 'telemetry' && (
-              <>
-                <p className="hero-lead-text" style={{ marginBottom: 16 }}>
-                  ZEB v2.4 operates a passive hybrid detection matrix designed to analyze zero-hour attack vectors without local workstation compromise.
-                </p>
-                <div className="engine-check-grid">
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><ShareNetwork size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 1: URL Exposing & De-obfuscation</strong>
-                      <p>Decodes decimal Dword, octal, and hex IP addresses. Unrolls recursive Base64 parameters and traces shortener hops.</p>
-                    </div>
-                  </div>
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><Shield size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 2: Multi-Engine Intelligence</strong>
-                      <p>Consensus arbitration across commercial reputation feeds with zero-panic degradation if external APIs fail.</p>
-                    </div>
-                  </div>
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><Database size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 3: Infrastructure & DNS</strong>
-                      <p>Evaluates Fast-Flux DNS, Autonomous System bulletproof hosting, and TLS certificate age thresholds (&lt;24 hours).</p>
-                    </div>
-                  </div>
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><Code size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 5: Deep DOM & Web3 Sniffer</strong>
-                      <p>Detects unencrypted passwords, clickjacking traps, Permit2 signatures, and dangerous MIME payload traps.</p>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeEditorialTab === 'methodology' && (
-              <p className="hero-lead-text">
-                Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host.
-              </p>
-            )}
-
-            {activeEditorialTab === 'faq' && (
-              <div className="findings-stream">
-                <div className="finding-row clean">
-                  <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
-                  <span className="finding-desc">
-                    <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
-                  </span>
-                </div>
-                <div className="finding-row clean">
-                  <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
-                  <span className="finding-desc">
-                    <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable links or preview cards.
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
           </>
         )}
       </div>
