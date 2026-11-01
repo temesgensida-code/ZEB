@@ -557,9 +557,46 @@
 }
 
 .check-submit-btn {
-  composes: mech-btn mech-btn-primary;
-  padding: 10px 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-sans);
   font-size: 0.9375rem;
+  font-weight: 700;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  padding: 10px 24px;
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: 1.5px solid var(--btn-primary-border);
+  box-shadow: var(--btn-shadow);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, opacity 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.check-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.check-submit-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 transparent;
+}
+
+.check-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--btn-shadow);
+}
+
+.check-submit-btn .micro-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(128, 128, 128, 0.4);
+  border-top-color: currentColor;
 }
 
 /* ─── Multi-Stage Progress Scanner ─────────────────────────────────────────── */
@@ -899,19 +936,26 @@
 }
 
 .editorial-dropdown-trigger {
-  composes: mech-btn;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
+  font-family: var(--font-sans);
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
   background-color: var(--bg-page);
   border: 1.5px solid var(--border-primary);
   border-radius: var(--radius-xs);
+  box-shadow: var(--btn-shadow);
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.06s ease;
+}
+
+.editorial-dropdown-trigger:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 transparent;
 }
 
 .editorial-dropdown-trigger:hover {
@@ -1299,10 +1343,10 @@
 }
 
 .copy-mini-btn {
-  composes: mech-btn;
   height: 32px;
   box-sizing: border-box;
   padding: 0 10px;
+  font-family: var(--font-sans);
   font-size: 0.75rem;
   font-weight: 600;
   text-decoration: none;
@@ -1310,17 +1354,25 @@
   color: var(--text-primary);
   border: 1.5px solid var(--border-primary);
   border-radius: var(--radius-xs);
+  box-shadow: var(--btn-shadow);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: transform 0.06s ease, border-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .copy-mini-btn:hover {
   background-color: transparent;
   border-color: var(--border-primary);
   color: var(--text-primary);
+}
+
+.copy-mini-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 transparent;
 }
 
 .copy-mini-btn.copy-icon-only {
