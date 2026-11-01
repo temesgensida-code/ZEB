@@ -353,7 +353,7 @@
   letter-spacing: -0.04em;
   line-height: 1.1;
   color: var(--text-primary);
-  margin-bottom: 10px;
+  margin-bottom: 22px;
 }
 
 .hero-author-meta {
@@ -396,6 +396,7 @@
 }
 
 .input-shell {
+  position: relative;
   display: flex;
   align-items: center;
   background-color: var(--bg-page);
@@ -410,6 +411,59 @@
   border-color: var(--border-primary);
   outline: 2px solid var(--border-primary);
   outline-offset: 1px;
+}
+
+/* 4 L-shaped corner reticles blinking smoothly in 1.75s interval */
+.input-corner-reticle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  z-index: 2;
+  animation: cornerBlink 1.75s ease-in-out infinite;
+}
+
+.input-corner-reticle.corner-tl {
+  top: -3px;
+  left: -3px;
+  border-top: 2px solid var(--text-primary);
+  border-left: 2px solid var(--text-primary);
+  border-top-left-radius: 4px;
+}
+
+.input-corner-reticle.corner-tr {
+  top: -3px;
+  right: -3px;
+  border-top: 2px solid var(--text-primary);
+  border-right: 2px solid var(--text-primary);
+  border-top-right-radius: 4px;
+}
+
+.input-corner-reticle.corner-bl {
+  bottom: -3px;
+  left: -3px;
+  border-bottom: 2px solid var(--text-primary);
+  border-left: 2px solid var(--text-primary);
+  border-bottom-left-radius: 4px;
+}
+
+.input-corner-reticle.corner-br {
+  bottom: -3px;
+  right: -3px;
+  border-bottom: 2px solid var(--text-primary);
+  border-right: 2px solid var(--text-primary);
+  border-bottom-right-radius: 4px;
+}
+
+@keyframes cornerBlink {
+  0%, 100% {
+    opacity: 0.20;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
 }
 
 .input-leading-icon {
@@ -812,110 +866,131 @@
   color: var(--text-muted);
 }
 
-/* ─── Clean Underlined Editorial Tabs ──────────────────────────────────────── */
-.editorial-tabs-bar {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  border-bottom: 1px solid var(--border-muted);
+/* ─── Editorial System Documentation Dropdown ─────────────────────────────── */
+.editorial-dropdown-wrapper {
   margin-top: 36px;
   margin-bottom: 24px;
-}
-
-.editorial-tab-btn {
-  background: transparent;
-  border: none;
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 10px 0 14px 0;
-  cursor: pointer;
   position: relative;
-  transition: color 0.15s ease;
 }
 
-.editorial-tab-btn:hover {
-  color: var(--text-primary);
-}
-
-.editorial-tab-btn.active {
-  color: var(--text-primary);
-}
-
-.editorial-tab-btn.active::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--text-primary);
-}
-
-/* ─── Editorial Information: Desktop Tabs vs Mobile Accordion ─────────────── */
-.editorial-tabs-desktop {
-  display: block;
-}
-
-.editorial-accordion-mobile {
-  display: none;
-}
-
-.editorial-accordion-item {
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.editorial-accordion-header {
-  width: 100%;
+.editorial-dropdown-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-muted);
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.editorial-dropdown-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.editorial-dropdown-anchor {
+  position: relative;
+}
+
+.editorial-dropdown-trigger {
+  composes: mech-btn;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
-  text-align: left;
-  user-select: none;
-  transition: color 0.15s ease;
+  background-color: var(--bg-page);
+  border: 1.5px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.editorial-accordion-header:hover {
+.editorial-dropdown-trigger:hover {
+  background-color: var(--bg-inset);
+}
+
+.dropdown-active-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
-.accordion-caret {
+.dropdown-caret {
   color: var(--text-muted);
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
-  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
 }
 
-.editorial-accordion-header.open .accordion-caret {
+.dropdown-caret.open {
   transform: rotate(180deg);
   color: var(--text-primary);
 }
 
-.editorial-accordion-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
-  overflow: hidden;
-  opacity: 0;
+.editorial-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 230px;
+  background-color: var(--bg-page);
+  border: 1.5px solid var(--border-primary);
+  box-shadow: var(--btn-shadow);
+  border-radius: var(--radius-xs);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
 }
 
-.editorial-accordion-body.open {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  padding-bottom: 20px;
+.editorial-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
 }
 
-.editorial-accordion-content {
-  min-height: 0;
+.editorial-dropdown-item:hover {
+  background-color: var(--bg-inset);
 }
+
+.editorial-dropdown-item.active {
+  font-weight: 700;
+  background-color: var(--bg-inset);
+}
+
+.editorial-content-pane {
+  animation: fadeInPane 0.2s ease-out;
+}
+
+@keyframes fadeInPane {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 
 /* ─── Interactive Link Dissector (URL Anatomy Breakdown) ───────────────────── */
 .link-dissector-card {
@@ -1224,15 +1299,45 @@
 
 .copy-mini-btn {
   composes: mech-btn;
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 0.75rem;
+  font-weight: 600;
   text-decoration: none;
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  transition: transform 0.06s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.copy-mini-btn.copied {
-  background: var(--risk-safe-bg);
+.copy-mini-btn:hover {
+  background-color: transparent;
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.copy-mini-btn.copy-icon-only {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-primary);
+  background-color: transparent;
+}
+
+.copy-mini-btn.copy-icon-only:hover {
+  background-color: transparent;
+  color: var(--text-primary);
+}
+
+.copy-mini-btn.copied,
+.copy-mini-btn.copy-icon-only.copied {
+  background-color: transparent;
   color: var(--risk-safe-text);
-  border-color: var(--risk-safe-border);
+  border-color: var(--risk-safe-accent, #10b981);
 }
 
 .verdict-explanation-msg {
@@ -2005,15 +2110,26 @@
     padding: 16px 14px 60px 14px;
   }
 
-  /* Editorial Tabs vs Mobile Accordion */
-  .editorial-tabs-desktop {
-    display: none;
+  /* Editorial Documentation Dropdown Mobile */
+  .editorial-dropdown-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 
-  .editorial-accordion-mobile {
-    display: block;
-    margin-top: 32px;
-    border-top: 1px solid var(--border-muted);
+  .editorial-dropdown-anchor {
+    width: 100%;
+  }
+
+  .editorial-dropdown-trigger {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .editorial-dropdown-menu {
+    width: 100%;
+    left: 0;
+    right: 0;
   }
 
   /* Engine Check Grid in Accordion / Modals */
@@ -2134,14 +2250,30 @@
   }
 
   .quick-presets-row {
+    display: flex;
+    align-items: center;
     justify-content: flex-start;
     overflow-x: auto;
     flex-wrap: nowrap;
     padding-bottom: 6px;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    gap: 8px;
+    width: 100%;
   }
 
-  .preset-chip {
+  .quick-presets-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .presets-label {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .preset-pill {
+    flex-shrink: 0;
     white-space: nowrap;
     font-size: 0.6875rem;
   }

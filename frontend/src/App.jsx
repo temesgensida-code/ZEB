@@ -338,11 +338,12 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
             </button>
             <button
               type="button"
-              className={`copy-mini-btn ${copiedKey === 'target-url' ? 'copied' : ''}`}
+              className={`copy-mini-btn copy-icon-only ${copiedKey === 'target-url' ? 'copied' : ''}`}
               onClick={() => handleCopy(url, 'target-url')}
               aria-label="Copy inspected URL"
+              title={copiedKey === 'target-url' ? 'Copied URL' : 'Copy URL'}
             >
-              {copiedKey === 'target-url' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy</>}
+              {copiedKey === 'target-url' ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
             </button>
             <button
               type="button"
@@ -519,11 +520,12 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
               </div>
               <button
                 type="button"
-                className={`copy-mini-btn ${copiedKey === 'final-url' ? 'copied' : ''}`}
+                className={`copy-mini-btn copy-icon-only ${copiedKey === 'final-url' ? 'copied' : ''}`}
                 onClick={() => handleCopy(redirect.finalUrl || url, 'final-url')}
                 aria-label="Copy resolved destination URL"
+                title={copiedKey === 'final-url' ? 'Copied' : 'Copy Destination URL'}
               >
-                {copiedKey === 'final-url' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy Destination</>}
+                {copiedKey === 'final-url' ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
               </button>
             </div>
           </div>
@@ -782,6 +784,12 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
   )
 }
 
+const EDITORIAL_SECTIONS = [
+  { id: 'telemetry', label: 'Engine Specifications' },
+  { id: 'methodology', label: 'Detection Architecture' },
+  { id: 'faq', label: 'Technical FAQ' },
+]
+
 // ─── Main Application Console Root ───────────────────────────────────────────
 export default function App() {
   const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
@@ -802,19 +810,19 @@ export default function App() {
     return localStorage.getItem('zeb-theme-pref') || 'system'
   })
 
-  // Mobile Bottom Info Accordions ('fall down' disclosure state)
-  const [mobileOpenSections, setMobileOpenSections] = useState({
-    telemetry: true,
-    methodology: false,
-    faq: false,
-  })
+  // Bottom Documentation Dropdown state
+  const [editorialDropdownOpen, setEditorialDropdownOpen] = useState(false)
+  const editorialDropdownRef = useRef(null)
 
-  function toggleMobileSection(key) {
-    setMobileOpenSections(prev => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (editorialDropdownRef.current && !editorialDropdownRef.current.contains(event.target)) {
+        setEditorialDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const inputRef = useRef(null)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -1028,7 +1036,7 @@ export default function App() {
             </span>
           </div>
 
-          <h1 className="hero-headline">Zero-Trust Link Inspector</h1>
+          <h1 className="hero-headline">Zeb: Link Inspector</h1>
 
           <div className="hero-author-meta">
             <span className="status-live-beacon" />
@@ -1043,6 +1051,10 @@ export default function App() {
         {/* Search Input Form */}
         <form className="checker-form" onSubmit={handleSubmit}>
           <div className="input-shell">
+            <span className="input-corner-reticle corner-tl" aria-hidden="true" />
+            <span className="input-corner-reticle corner-tr" aria-hidden="true" />
+            <span className="input-corner-reticle corner-bl" aria-hidden="true" />
+            <span className="input-corner-reticle corner-br" aria-hidden="true" />
             <span className="input-leading-icon">
               <LinkIcon size={18} weight="bold" />
             </span>
@@ -1115,10 +1127,7 @@ export default function App() {
                   <span>Inspecting...</span>
                 </>
               ) : (
-                <>
-                  <MagnifyingGlass size={16} weight="bold" />
-                  <span>Inspect URL</span>
-                </>
+                <span>Inspect URL</span>
               )}
             </button>
           </div>
@@ -1158,36 +1167,45 @@ export default function App() {
           />
         )}
 
-        {/* Bottom Information: Desktop Horizontal Tabs */}
-        <div className="editorial-tabs-desktop">
-          <div className="editorial-tabs-bar" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeEditorialTab === 'telemetry'}
-              className={`editorial-tab-btn ${activeEditorialTab === 'telemetry' ? 'active' : ''}`}
-              onClick={() => setActiveEditorialTab('telemetry')}
-            >
-              Engine Specifications
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeEditorialTab === 'methodology'}
-              className={`editorial-tab-btn ${activeEditorialTab === 'methodology' ? 'active' : ''}`}
-              onClick={() => setActiveEditorialTab('methodology')}
-            >
-              Detection Architecture
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeEditorialTab === 'faq'}
-              className={`editorial-tab-btn ${activeEditorialTab === 'faq' ? 'active' : ''}`}
-              onClick={() => setActiveEditorialTab('faq')}
-            >
-              Technical FAQ
-            </button>
+        {/* Bottom Information: Interactive Documentation Dropdown */}
+        <div className="editorial-dropdown-wrapper" ref={editorialDropdownRef}>
+          <div className="editorial-dropdown-header-row">
+            <span className="editorial-dropdown-eyebrow">DOCUMENTATION & ARCHITECTURE</span>
+            <div className="editorial-dropdown-anchor">
+              <button
+                type="button"
+                className="editorial-dropdown-trigger"
+                onClick={() => setEditorialDropdownOpen(prev => !prev)}
+                aria-expanded={editorialDropdownOpen}
+                aria-haspopup="listbox"
+              >
+                <span className="dropdown-active-label">
+                  {(EDITORIAL_SECTIONS.find(s => s.id === activeEditorialTab) || EDITORIAL_SECTIONS[0]).label}
+                </span>
+                <CaretDown size={14} weight="bold" className={`dropdown-caret ${editorialDropdownOpen ? 'open' : ''}`} />
+              </button>
+
+              {editorialDropdownOpen && (
+                <div className="editorial-dropdown-menu" role="listbox">
+                  {EDITORIAL_SECTIONS.map(section => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      role="option"
+                      aria-selected={activeEditorialTab === section.id}
+                      className={`editorial-dropdown-item ${activeEditorialTab === section.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveEditorialTab(section.id)
+                        setEditorialDropdownOpen(false)
+                      }}
+                    >
+                      <span>{section.label}</span>
+                      {activeEditorialTab === section.id && <Check size={14} weight="bold" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="editorial-content-pane">
@@ -1251,110 +1269,6 @@ export default function App() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Bottom Information: Mobile Fall-Down Collapsible Accordion */}
-        <div className="editorial-accordion-mobile" role="region" aria-label="Engine specifications and technical details">
-          {/* Accordion Item 1: Engine Specifications */}
-          <div className="editorial-accordion-item">
-            <button
-              type="button"
-              className={`editorial-accordion-header ${mobileOpenSections.telemetry ? 'open' : ''}`}
-              onClick={() => toggleMobileSection('telemetry')}
-              aria-expanded={mobileOpenSections.telemetry}
-            >
-              <span>Engine Specifications</span>
-              <CaretDown size={16} weight="bold" className="accordion-caret" />
-            </button>
-            <div className={`editorial-accordion-body ${mobileOpenSections.telemetry ? 'open' : ''}`}>
-              <div className="editorial-accordion-content">
-                <p className="hero-lead-text" style={{ marginBottom: 14 }}>
-                  ZEB v2.4 operates a passive hybrid detection matrix designed to analyze zero-hour attack vectors without local workstation compromise.
-                </p>
-                <div className="engine-check-grid">
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><ShareNetwork size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 1: URL Exposing & De-obfuscation</strong>
-                      <p>Decodes decimal Dword, octal, and hex IP addresses. Unrolls recursive Base64 parameters and traces shortener hops.</p>
-                    </div>
-                  </div>
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><Shield size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 2: Multi-Engine Intelligence</strong>
-                      <p>Consensus arbitration across commercial reputation feeds with zero-panic degradation if external APIs fail.</p>
-                    </div>
-                  </div>
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><Database size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 3: Infrastructure & DNS</strong>
-                      <p>Evaluates Fast-Flux DNS, Autonomous System bulletproof hosting, and TLS certificate age thresholds (&lt;24 hours).</p>
-                    </div>
-                  </div>
-                  <div className="engine-check-card">
-                    <span className="engine-card-icon"><Code size={18} weight="bold" /></span>
-                    <div className="engine-card-details">
-                      <strong>Pillar 5: Deep DOM & Web3 Sniffer</strong>
-                      <p>Detects unencrypted passwords, clickjacking traps, Permit2 signatures, and dangerous MIME payload traps.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Accordion Item 2: Detection Architecture */}
-          <div className="editorial-accordion-item">
-            <button
-              type="button"
-              className={`editorial-accordion-header ${mobileOpenSections.methodology ? 'open' : ''}`}
-              onClick={() => toggleMobileSection('methodology')}
-              aria-expanded={mobileOpenSections.methodology}
-            >
-              <span>Detection Architecture</span>
-              <CaretDown size={16} weight="bold" className="accordion-caret" />
-            </button>
-            <div className={`editorial-accordion-body ${mobileOpenSections.methodology ? 'open' : ''}`}>
-              <div className="editorial-accordion-content">
-                <p className="hero-lead-text">
-                  Traditional URL checkers rely solely on commercial domain blocklists, leaving users vulnerable to zero-hour campaigns. ZEB analyzes the intrinsic physical properties of the URL, the hosting network topology, and the destination DOM payload to identify deception before domain registries flag the host.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Accordion Item 3: Technical FAQ */}
-          <div className="editorial-accordion-item">
-            <button
-              type="button"
-              className={`editorial-accordion-header ${mobileOpenSections.faq ? 'open' : ''}`}
-              onClick={() => toggleMobileSection('faq')}
-              aria-expanded={mobileOpenSections.faq}
-            >
-              <span>Technical FAQ</span>
-              <CaretDown size={16} weight="bold" className="accordion-caret" />
-            </button>
-            <div className={`editorial-accordion-body ${mobileOpenSections.faq ? 'open' : ''}`}>
-              <div className="editorial-accordion-content">
-                <div className="findings-stream">
-                  <div className="finding-row clean">
-                    <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
-                    <span className="finding-desc">
-                      <strong>Can inspecting a URL trigger a malware download on my computer?</strong> No. All fetches, DNS resolutions, and DOM audits occur passively on isolated backend workers. No client-side scripts run on your device.
-                    </span>
-                  </div>
-                  <div className="finding-row clean">
-                    <span className="finding-dot"><CheckCircle size={14} weight="bold" /></span>
-                    <span className="finding-desc">
-                      <strong>What is link defanging?</strong> Defanging alters the URL format (e.g. converting `http` to `hxxp` and dots to `[.]`) so that communication tools like Slack, Teams, and Jira do not automatically generate clickable links or preview cards.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
           </>

@@ -626,10 +626,12 @@ print(response.json())`
               <span>cURL</span>
               <button
                 type="button"
-                className="copy-mini-btn"
+                className={`copy-mini-btn copy-icon-only ${copiedKey === 'curl' ? 'copied' : ''}`}
                 onClick={() => handleCopy(curlSnippet, 'curl')}
+                aria-label="Copy cURL snippet"
+                title={copiedKey === 'curl' ? 'Copied' : 'Copy cURL'}
               >
-                {copiedKey === 'curl' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy</>}
+                {copiedKey === 'curl' ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
               </button>
             </div>
             <pre className="code-pre"><code>{curlSnippet}</code></pre>
@@ -640,10 +642,12 @@ print(response.json())`
               <span>Python (requests)</span>
               <button
                 type="button"
-                className="copy-mini-btn"
+                className={`copy-mini-btn copy-icon-only ${copiedKey === 'python' ? 'copied' : ''}`}
                 onClick={() => handleCopy(pythonSnippet, 'python')}
+                aria-label="Copy Python snippet"
+                title={copiedKey === 'python' ? 'Copied' : 'Copy Python'}
               >
-                {copiedKey === 'python' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy</>}
+                {copiedKey === 'python' ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
               </button>
             </div>
             <pre className="code-pre"><code>{pythonSnippet}</code></pre>
