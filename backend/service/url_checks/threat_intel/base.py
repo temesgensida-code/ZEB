@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+import aiohttp
 
 
 class EngineStatus(str, Enum):
@@ -35,13 +36,13 @@ class EngineResult:
 
 
 class BaseThreatEngine(ABC):
-    """Abstract base class for all threat intelligence providers."""
+    """Abstract base class for all asynchronous threat intelligence providers."""
 
     def __init__(self, name: str, timeout: float = 2.0):
         self.name = name
         self.timeout = timeout
 
     @abstractmethod
-    def evaluate(self, target_url: str) -> EngineResult:
-        """Analyze target_url and return an EngineResult without raising unhandled exceptions."""
+    async def evaluate(self, target_url: str, session: aiohttp.ClientSession | None = None) -> EngineResult:
+        """Analyze target_url asynchronously and return an EngineResult without raising unhandled exceptions."""
         raise NotImplementedError

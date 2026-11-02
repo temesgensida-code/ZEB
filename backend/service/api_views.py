@@ -5,15 +5,21 @@ usage logging, and strict third-party commercial service isolation.
 """
 
 import time
+from asgiref.sync import sync_to_async
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from .async_api import AsyncAPIView
 from .mongo import authenticate_api_key, check_quota_and_rate_limit, record_usage_log
-from .url_checks import normalize_url, analyze_url_structure
+from .url_checks import normalize_url, analyze_url_structure, create_scan_session
+
+async_authenticate_key = sync_to_async(authenticate_api_key, thread_sensitive=False)
+async_check_quota = sync_to_async(check_quota_and_rate_limit, thread_sensitive=False)
+async_record_usage = sync_to_async(record_usage_log, thread_sensitive=False)
 
 
-class DeveloperScanView(APIView):
+class DeveloperScanView(AsyncAPIView):
     """
     POST /api/v1/scan
     Public developer endpoint providing programmatic access to ZEB's proprietary
@@ -23,12 +29,12 @@ class DeveloperScanView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def post(self, request):
+    async def post(self, request):
         start_time = time.time()
 
         # 1. Authenticate API Key
         raw_key = request.headers.get('X-API-Key') or request.META.get('HTTP_X_API_KEY')
-        key_doc = authenticate_api_key(raw_key)
+        key_doc = await async_authenticate_key(raw_key)
         if not key_doc:
             return Response(
                 {
@@ -39,7 +45,7 @@ class DeveloperScanView(APIView):
             )
 
         # 2. Enforce Rate Limits & Daily Quota
-        allowed, throttle_msg = check_quota_and_rate_limit(key_doc)
+        allowed, throttle_msg = await async_check_quota(key_doc)
         if not allowed:
             return Response(
                 {'error': throttle_msg},
@@ -57,7 +63,8 @@ class DeveloperScanView(APIView):
 
         # 4. Execute ZEB Proprietary Heuristics Matrix (STRICTLY NO THIRD-PARTY FEEDS)
         # Note: analyze_url_structure runs Pillars 1, 3, 4, 5 heuristics
-        structure_analysis = analyze_url_structure(canonical_url)
+        async with create_scan_session(total_timeout=15.0) as session:
+            structure_analysis = await analyze_url_structure(canonical_url, session=session)
 
         findings = structure_analysis.get('findings', [])
         flagged_count = sum(1 for f in findings if f.get('flagged'))
@@ -91,7 +98,7 @@ class DeveloperScanView(APIView):
         if ',' in client_ip:
             client_ip = client_ip.split(',')[0].strip()
 
-        record_usage_log(
+        await async_record_usage(
             key_doc=key_doc,
             target_url=target_url,
             response_status=200,

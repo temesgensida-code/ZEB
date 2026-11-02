@@ -1,5 +1,7 @@
+import asyncio
 import time
 from typing import Any
+import aiohttp
 
 from .differential_probing import audit_multi_vantage_cloaking
 from .headless_worker import HeadlessBrowserWorker
@@ -9,27 +11,28 @@ from .visual_matcher import evaluate_visual_impersonation
 class DynamicSandboxManager:
     """
     Coordinates dynamic client-side JS rendering, differential multi-vantage probing,
-    and perceptual hash visual clone matching.
+    and perceptual hash visual clone matching asynchronously.
     """
 
     def __init__(self, overall_timeout_sec: float = 5.0):
         self.worker = HeadlessBrowserWorker()
         self.overall_timeout = overall_timeout_sec
 
-    def evaluate(
+    async def evaluate(
         self,
         target_url: str,
         registered_domain: str,
         findings: list | None = None,
+        session: aiohttp.ClientSession | None = None,
     ) -> dict[str, Any]:
         target_findings = findings if findings is not None else []
         start_time = time.time()
 
-        # 1. Multi-vantage differential cloaking probing (Fast HTTP)
-        cloaking_result = audit_multi_vantage_cloaking(target_url, target_findings)
+        # 1. Multi-vantage differential cloaking probing (Fast asynchronous HTTP)
+        cloaking_result = await audit_multi_vantage_cloaking(target_url, target_findings, session=session)
 
-        # 2. Dynamic headless browser execution (Playwright / Chromium)
-        worker_result = self.worker.run_sandbox_session(target_url)
+        # 2. Dynamic headless browser execution (offloaded to thread to avoid event loop stalling)
+        worker_result = await asyncio.to_thread(self.worker.run_sandbox_session, target_url)
 
         screenshot_uri = worker_result.get('screenshotDataUri')
         intercepted = worker_result.get('interceptedRequests', [])

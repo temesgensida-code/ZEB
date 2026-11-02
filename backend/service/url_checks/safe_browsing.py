@@ -1,9 +1,13 @@
 import json
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+import aiohttp
+from .session_manager import create_scan_session
 
 
-def check_safe_browsing(target_url: str, api_key: str) -> list[dict]:
+async def check_safe_browsing(
+    target_url: str,
+    api_key: str,
+    session: aiohttp.ClientSession | None = None,
+) -> list[dict]:
     payload = {
         'client': {'clientId': 'zeb-url-checker', 'clientVersion': '1.0.0'},
         'threatInfo': {
@@ -24,30 +28,27 @@ def check_safe_browsing(target_url: str, api_key: str) -> list[dict]:
         f'?key={api_key}'
     )
 
-    request_data = json.dumps(payload).encode('utf-8')
-    api_request = Request(
-        endpoint,
-        data=request_data,
-        headers={'Content-Type': 'application/json'},
-        method='POST',
-    )
+    async def _fetch(sess: aiohttp.ClientSession) -> list[dict]:
+        try:
+            async with sess.post(endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=10.0)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    matches = data.get('matches', [])
+                    return [
+                        {
+                            'threatType': match.get('threatType', 'UNKNOWN'),
+                            'platformType': match.get('platformType', 'UNKNOWN'),
+                            'threatEntryType': match.get('threatEntryType', 'UNKNOWN'),
+                        }
+                        for match in matches
+                    ]
+                raise RuntimeError(f'Google API returned HTTP {resp.status}.')
+        except (aiohttp.ClientError, RuntimeError):
+            raise
+        except Exception as exc:
+            raise ConnectionError('Could not reach Google Safe Browsing API.') from exc
 
-    try:
-        with urlopen(api_request, timeout=10) as upstream:
-            body = upstream.read().decode('utf-8')
-    except HTTPError as exc:
-        raise RuntimeError(f'Google API returned HTTP {exc.code}.') from exc
-    except URLError as exc:
-        raise ConnectionError('Could not reach Google Safe Browsing API.') from exc
-
-    response_json = json.loads(body) if body else {}
-    matches = response_json.get('matches', [])
-
-    return [
-        {
-            'threatType': match.get('threatType', 'UNKNOWN'),
-            'platformType': match.get('platformType', 'UNKNOWN'),
-            'threatEntryType': match.get('threatEntryType', 'UNKNOWN'),
-        }
-        for match in matches
-    ]
+    if session is not None:
+        return await _fetch(session)
+    async with create_scan_session(total_timeout=12.0) as local_session:
+        return await _fetch(local_session)

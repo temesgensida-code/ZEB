@@ -1,12 +1,16 @@
+import asyncio
 import logging
 import time
 import unicodedata
 from urllib.parse import urlparse
 
+import aiohttp
 import idna
 import tldextract
 
 logger = logging.getLogger(__name__)
+
+from .session_manager import create_scan_session
 
 from .common import (
     decode_obfuscated_ip,
@@ -112,7 +116,11 @@ def analyze_idn_homographs(hostname: str) -> dict:
     }
 
 
-def analyze_url_structure(target_url: str, telemetry: dict | None = None) -> dict:
+async def _analyze_url_structure_with_session(
+    target_url: str,
+    session: aiohttp.ClientSession,
+    telemetry: dict | None = None,
+) -> dict:
     t_struct_cpu_start = time.perf_counter()
     parsed = urlparse(target_url)
     hostname = (parsed.hostname or '').lower()
@@ -233,20 +241,43 @@ def analyze_url_structure(target_url: str, telemetry: dict | None = None) -> dic
         telemetry['cpu_structure_ms'] = (time.perf_counter() - t_struct_cpu_start) * 1000
 
     t_whois0 = time.perf_counter()
-    domain_age = analyze_domain_age(registered_domain_full, findings)
-    if telemetry is not None:
-        telemetry['io_whois_ms'] = (time.perf_counter() - t_whois0) * 1000
+    domain_age_task = asyncio.create_task(analyze_domain_age(registered_domain_full, findings))
+
+    t_infra0 = time.perf_counter()
+    infra_task = asyncio.create_task(
+        infrastructure_manager.evaluate(
+            hostname=hostname,
+            registered_domain=registered_domain_full,
+            resolved_ip=decoded_ip if is_obfuscated_ip else None,
+            matched_brand=typosquatting_match,
+            findings=findings,
+            session=session,
+        )
+    )
+
+    t_dyn0 = time.perf_counter()
+    dyn_task = asyncio.create_task(
+        dynamic_sandbox_manager.evaluate(
+            target_url=target_url,
+            registered_domain=registered_domain_full,
+            findings=findings,
+            session=session,
+        )
+    )
 
     t_redir0 = time.perf_counter()
-    redirect_analysis = analyze_redirect_chain(target_url, registered_domain_full, findings)
+    redirect_analysis = await analyze_redirect_chain(
+        target_url, registered_domain_full, findings, session=session
+    )
     if telemetry is not None:
         telemetry['io_redirect_ms'] = (time.perf_counter() - t_redir0) * 1000
 
     try:
-        sandbox_preview = analyze_sandbox_preview(
+        sandbox_preview = await analyze_sandbox_preview(
             redirect_analysis['finalUrl'] or target_url,
             findings,
             telemetry=telemetry,
+            session=session,
         )
     except Exception as exc:
         logger.exception("Failed to analyze sandbox preview: %s", exc)
@@ -296,23 +327,25 @@ def analyze_url_structure(target_url: str, telemetry: dict | None = None) -> dic
                 },
             },
         }
-    t_infra0 = time.perf_counter()
-    infra_analysis = infrastructure_manager.evaluate(
-        hostname=hostname,
-        registered_domain=registered_domain_full,
-        resolved_ip=decoded_ip if is_obfuscated_ip else None,
-        matched_brand=typosquatting_match,
-        findings=findings,
-    )
+
+    try:
+        domain_age = await domain_age_task
+    except Exception:
+        domain_age = {'available': False, 'isNewDomain': None, 'domainAgeDays': None, 'createdDate': None}
+    if telemetry is not None:
+        telemetry['io_whois_ms'] = (time.perf_counter() - t_whois0) * 1000
+
+    try:
+        infra_analysis = await infra_task
+    except Exception:
+        infra_analysis = {'dns': {}, 'mail': {}, 'asn': {}, 'sslDeep': {}}
     if telemetry is not None:
         telemetry['io_infra_ms'] = (time.perf_counter() - t_infra0) * 1000
 
-    t_dyn0 = time.perf_counter()
-    dynamic_sandbox = dynamic_sandbox_manager.evaluate(
-        target_url=target_url,
-        registered_domain=registered_domain_full,
-        findings=findings,
-    )
+    try:
+        dynamic_sandbox = await dyn_task
+    except Exception:
+        dynamic_sandbox = {}
     if telemetry is not None:
         telemetry['dynamic_sandbox_ms'] = (time.perf_counter() - t_dyn0) * 1000
 
@@ -363,3 +396,16 @@ def analyze_url_structure(target_url: str, telemetry: dict | None = None) -> dic
     if telemetry is not None:
         res['_telemetry'] = telemetry
     return res
+
+
+async def analyze_url_structure(
+    target_url: str,
+    telemetry: dict | None = None,
+    session: aiohttp.ClientSession | None = None,
+) -> dict:
+    """Public async entry point for URL structure and multi-engine analysis."""
+    if session is not None:
+        return await _analyze_url_structure_with_session(target_url, session, telemetry)
+    async with create_scan_session(total_timeout=15.0) as local_session:
+        return await _analyze_url_structure_with_session(target_url, local_session, telemetry)
+

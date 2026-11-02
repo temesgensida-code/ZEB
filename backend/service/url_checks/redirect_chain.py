@@ -24,8 +24,11 @@ import socket
 from ipaddress import ip_address, ip_network
 from urllib.parse import parse_qsl, unquote, urljoin, urlparse
 
-import requests
+import asyncio
+import aiohttp
 import tldextract
+
+from .session_manager import create_scan_session
 
 from .common import (
     decode_obfuscated_ip,
@@ -282,10 +285,11 @@ def _hop_detail(
 # Public API
 # ---------------------------------------------------------------------------
 
-def analyze_redirect_chain(
+async def _analyze_redirect_chain_with_session(
     target_url: str,
     original_domain: str,
     findings: list,
+    session: aiohttp.ClientSession,
 ) -> dict:
     """
     Follow all redirects from *target_url* and analyse each hop for safety.
@@ -386,7 +390,7 @@ def analyze_redirect_chain(
         host = (parsed.hostname or '').lower()
 
         # SSRF Guard: resolve host to IP and verify not blocked
-        resolved_ip = resolve_host_ip(host)
+        resolved_ip = await asyncio.to_thread(resolve_host_ip, host)
         if resolved_ip and is_blocked_ssrf_ip(resolved_ip):
             ssrf_blocked = True
             findings.append({
@@ -433,14 +437,72 @@ def analyze_redirect_chain(
         is_short = host in URL_SHORTENERS or _registered_domain(host) in URL_SHORTENERS
 
         try:
-            resp = requests.get(
+            req_timeout = aiohttp.ClientTimeout(total=3.0)
+            async with session.get(
                 current_url,
                 allow_redirects=False,
-                timeout=3.0,
+                timeout=req_timeout,
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
-                stream=True,
-            )
-        except requests.exceptions.Timeout:
+            ) as resp:
+                status_code = resp.status
+
+                # Read first 64KB for inspection
+                body_chunk = ""
+                try:
+                    raw_bytes = await resp.content.read(65536)
+                    body_chunk = raw_bytes.decode('utf-8', errors='ignore') if isinstance(raw_bytes, bytes) else str(raw_bytes)
+                    final_body_snippet = body_chunk
+                except Exception:
+                    pass
+
+                # Determine next destination hop
+                next_url: str | None = None
+                hop_type = 'TERMINAL'
+
+                # 1. HTTP 3xx Location header
+                if 300 <= status_code < 400 and 'Location' in resp.headers:
+                    loc = resp.headers['Location'].strip()
+                    next_url = urljoin(current_url, loc)
+                    hop_type = 'SHORTENER' if is_short else 'HTTP_3XX'
+
+                # 2. HTTP Refresh header
+                elif 'Refresh' in resp.headers:
+                    ref_val = resp.headers['Refresh']
+                    match = re.search(r'url\s*=\s*([^;,\s]+)', ref_val, re.I)
+                    if match:
+                        cand = match.group(1).strip("'\"")
+                        next_url = urljoin(current_url, cand)
+                        hop_type = 'HTTP_REFRESH'
+
+                # 3. HTML Meta Refresh
+                elif body_chunk:
+                    meta_match = re.search(r'<meta[^>]*http-equiv=["\']?refresh["\']?[^>]*content=["\']?[0-9]+;\s*url=([^"\'\s>]+)', body_chunk, re.I)
+                    if meta_match:
+                        cand = meta_match.group(1).strip("'\"")
+                        next_url = urljoin(current_url, cand)
+                        hop_type = 'META_REFRESH'
+                    else:
+                        # 4. Inline JS redirect (window.location / location.replace)
+                        js_match = re.search(r'(?:window\.)?location(?:\.href)?\s*=\s*["\']([^"\'\s]+)["\']|location\.replace\s*\(\s*["\']([^"\'\s]+)["\']\)', body_chunk, re.I)
+                        if js_match:
+                            cand = (js_match.group(1) or js_match.group(2) or '').strip()
+                            if cand and not cand.startswith(('javascript:', '#')):
+                                next_url = urljoin(current_url, cand)
+                                hop_type = 'JS_REDIRECT'
+
+                hops_data.append({
+                    'url': current_url,
+                    'statusCode': status_code,
+                    'ip': resolved_ip,
+                    'hopType': hop_type,
+                    'isShortener': is_short,
+                })
+
+                if next_url and next_url != current_url:
+                    current_url = next_url
+                else:
+                    break
+        except (asyncio.TimeoutError, aiohttp.ServerTimeoutError):
             findings.append({
                 'type': 'REDIRECT_CHECK_TIMEOUT',
                 'flagged': False,
@@ -454,7 +516,7 @@ def analyze_redirect_chain(
                 'isShortener': is_short,
             })
             break
-        except requests.exceptions.ConnectionError:
+        except (aiohttp.ClientConnectorError, aiohttp.ClientConnectorCertificateError, aiohttp.ClientConnectorSSLError):
             findings.append({
                 'type': 'REDIRECT_CHECK_DNS_FAILURE',
                 'flagged': False,
@@ -468,7 +530,7 @@ def analyze_redirect_chain(
                 'isShortener': is_short,
             })
             break
-        except requests.RequestException as exc:
+        except Exception as exc:
             findings.append({
                 'type': 'REDIRECT_CHECK_UNAVAILABLE',
                 'flagged': False,
@@ -481,70 +543,6 @@ def analyze_redirect_chain(
                 'hopType': 'UNAVAILABLE',
                 'isShortener': is_short,
             })
-            break
-
-        status_code = resp.status_code
-
-        # Read first 64KB for inspection
-        body_chunk = ""
-        try:
-            if hasattr(resp, 'raw') and hasattr(resp.raw, 'read'):
-                raw_bytes = resp.raw.read(65536)
-                body_chunk = raw_bytes.decode('utf-8', errors='ignore') if isinstance(raw_bytes, bytes) else str(raw_bytes)
-            elif hasattr(resp, 'text'):
-                body_chunk = resp.text[:65536]
-            elif hasattr(resp, 'content'):
-                body_chunk = resp.content[:65536].decode('utf-8', errors='ignore')
-            final_body_snippet = body_chunk
-        except Exception:
-            pass
-
-        # Determine next destination hop
-        next_url: str | None = None
-        hop_type = 'TERMINAL'
-
-        # 1. HTTP 3xx Location header
-        if 300 <= status_code < 400 and 'Location' in resp.headers:
-            loc = resp.headers['Location'].strip()
-            next_url = urljoin(current_url, loc)
-            hop_type = 'SHORTENER' if is_short else 'HTTP_3XX'
-
-        # 2. HTTP Refresh header
-        elif 'Refresh' in resp.headers:
-            ref_val = resp.headers['Refresh']
-            match = re.search(r'url\s*=\s*([^;,\s]+)', ref_val, re.I)
-            if match:
-                cand = match.group(1).strip("'\"")
-                next_url = urljoin(current_url, cand)
-                hop_type = 'HTTP_REFRESH'
-
-        # 3. HTML Meta Refresh
-        elif body_chunk:
-            meta_match = re.search(r'<meta[^>]*http-equiv=["\']?refresh["\']?[^>]*content=["\']?[0-9]+;\s*url=([^"\'\s>]+)', body_chunk, re.I)
-            if meta_match:
-                cand = meta_match.group(1).strip("'\"")
-                next_url = urljoin(current_url, cand)
-                hop_type = 'META_REFRESH'
-            else:
-                # 4. Inline JS redirect (window.location / location.replace)
-                js_match = re.search(r'(?:window\.)?location(?:\.href)?\s*=\s*["\']([^"\'\s]+)["\']|location\.replace\s*\(\s*["\']([^"\'\s]+)["\']\)', body_chunk, re.I)
-                if js_match:
-                    cand = (js_match.group(1) or js_match.group(2) or '').strip()
-                    if cand and not cand.startswith(('javascript:', '#')):
-                        next_url = urljoin(current_url, cand)
-                        hop_type = 'JS_REDIRECT'
-
-        hops_data.append({
-            'url': current_url,
-            'statusCode': status_code,
-            'ip': resolved_ip,
-            'hopType': hop_type,
-            'isShortener': is_short,
-        })
-
-        if next_url and next_url != current_url:
-            current_url = next_url
-        else:
             break
 
     # If no network hops were made (e.g. fatal failure)
@@ -703,3 +701,17 @@ def analyze_redirect_chain(
         'loopDetected': loop_detected,
         'bodySnippet': final_body_snippet,
     }
+
+
+async def analyze_redirect_chain(
+    target_url: str,
+    original_domain: str,
+    findings: list,
+    session: aiohttp.ClientSession | None = None,
+) -> dict:
+    """Public async entry point for redirect chain safety analysis."""
+    if session is not None:
+        return await _analyze_redirect_chain_with_session(target_url, original_domain, findings, session)
+    async with create_scan_session(total_timeout=15.0) as local_session:
+        return await _analyze_redirect_chain_with_session(target_url, original_domain, findings, local_session)
+

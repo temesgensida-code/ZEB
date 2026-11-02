@@ -1,8 +1,14 @@
+import asyncio
 from datetime import datetime, timezone
 import socket
 import ssl
 
 FREE_DV_ISSUERS = {"Let's Encrypt", 'ZeroSSL', 'cPanel, Inc.', 'Certum'}
+
+
+async def async_deep_audit_ssl(hostname: str, matched_brand: str | None, findings: list) -> dict:
+    """Non-blocking asynchronous wrapper around deep_audit_ssl."""
+    return await asyncio.to_thread(deep_audit_ssl, hostname, matched_brand, findings)
 
 
 def deep_audit_ssl(hostname: str, matched_brand: str | None, findings: list) -> dict:

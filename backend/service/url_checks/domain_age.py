@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime
 
 import whois
@@ -17,7 +18,7 @@ def parse_creation_date(value):
     return None
 
 
-def analyze_domain_age(query_domain: str, findings: list) -> dict:
+async def analyze_domain_age(query_domain: str, findings: list) -> dict:
     if not query_domain:
         return {
             'available': False,
@@ -27,7 +28,7 @@ def analyze_domain_age(query_domain: str, findings: list) -> dict:
         }
 
     try:
-        whois_result = whois.whois(query_domain)
+        whois_result = await asyncio.to_thread(whois.whois, query_domain)
     except Exception:
         findings.append(
             {

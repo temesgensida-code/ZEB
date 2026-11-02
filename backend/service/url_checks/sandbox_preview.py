@@ -29,9 +29,12 @@ from collections import Counter
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 
-import requests
+import asyncio
+import aiohttp
 import tldextract
 from bs4 import BeautifulSoup
+
+from .session_manager import create_scan_session
 
 from .common import detect_typosquatting_brand, is_ip_host, is_ip_like_host
 from .constants import (
@@ -178,9 +181,9 @@ def _check_ssl_certificate(hostname: str, port: int = 443) -> list[dict]:
     return issues
 
 
-def _analyse_redirect_chain(response: requests.Response) -> list[dict]:
+def _analyse_redirect_chain(response: Any) -> list[dict]:
     """
-    Inspect the redirect history attached to a *requests.Response* object.
+    Inspect the redirect history attached to a response object.
     Returns a list of suspicious hop descriptors.
     """
     issues: list[dict] = []
@@ -193,8 +196,8 @@ def _analyse_redirect_chain(response: requests.Response) -> list[dict]:
         })
 
     for i in range(len(history) - 1):
-        from_url = history[i].url
-        to_url = history[i + 1].url
+        from_url = str(history[i].url)
+        to_url = str(history[i + 1].url)
         from_scheme = urlparse(from_url).scheme
         to_scheme = urlparse(to_url).scheme
         if from_scheme == 'https' and to_scheme == 'http':
@@ -206,9 +209,9 @@ def _analyse_redirect_chain(response: requests.Response) -> list[dict]:
     return issues
 
 
-def _analyse_security_headers(headers: requests.structures.CaseInsensitiveDict) -> list[str]:
+def _analyse_security_headers(headers: Any) -> list[str]:
     """Return a list of missing (expected) security response headers."""
-    lower_keys = {k.lower() for k in headers}
+    lower_keys = {str(k).lower() for k in headers}
     return [h for h in _EXPECTED_SECURITY_HEADERS if h not in lower_keys]
 
 
@@ -397,9 +400,10 @@ def audit_dom_forms(soup: BeautifulSoup, page_url: str, findings: list) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
-def analyze_sandbox_preview(
+async def _analyze_sandbox_preview_with_session(
     preview_url: str,
     findings: list,
+    session: aiohttp.ClientSession,
     telemetry: dict | None = None,
 ) -> dict:
     """
@@ -473,7 +477,7 @@ def analyze_sandbox_preview(
     if input_host and parsed_input.scheme == 'https':
         t_ssl_start = time.perf_counter()
         port = parsed_input.port or 443
-        ssl_issues = _check_ssl_certificate(input_host, port)
+        ssl_issues = await asyncio.to_thread(_check_ssl_certificate, input_host, port)
         if telemetry is not None:
             telemetry['io_sandbox_ssl_ms'] = (time.perf_counter() - t_ssl_start) * 1000
         if ssl_issues:
@@ -491,18 +495,105 @@ def analyze_sandbox_preview(
     # ------------------------------------------------------------------
     t_get_start = time.perf_counter()
     try:
-        response = requests.get(
+        req_timeout = aiohttp.ClientTimeout(total=12.0)
+        async with session.get(
             preview_url,
             allow_redirects=True,
-            timeout=12,
+            timeout=req_timeout,
             headers={
                 'User-Agent': 'zeb-url-checker-sandbox/1.0',
                 'Accept': 'text/html,application/xhtml+xml',
             },
-        )
-        if telemetry is not None:
-            telemetry['io_sandbox_http_ms'] = (time.perf_counter() - t_get_start) * 1000
-    except requests.RequestException as exc:
+        ) as response:
+            if telemetry is not None:
+                telemetry['io_sandbox_http_ms'] = (time.perf_counter() - t_get_start) * 1000
+
+            resp_url = str(response.url)
+            redirect_chain = [str(r.url) for r in response.history] + [resp_url]
+            redirect_issues = _analyse_redirect_chain(response)
+            if redirect_issues:
+                findings.append({
+                    'type': 'SANDBOX_SUSPICIOUS_REDIRECT_CHAIN',
+                    'flagged': True,
+                    'explanation': (
+                        'The URL redirect chain raised concerns: '
+                        + '; '.join(i['issue'] for i in redirect_issues) + '.'
+                    ),
+                })
+
+            missing_sec_headers = _analyse_security_headers(response.headers)
+            if len(missing_sec_headers) > len(_EXPECTED_SECURITY_HEADERS) // 2:
+                findings.append({
+                    'type': 'SANDBOX_WEAK_SECURITY_HEADERS',
+                    'flagged': True,
+                    'explanation': (
+                        'The server response is missing several important security headers: '
+                        + ', '.join(missing_sec_headers) + '.'
+                    ),
+                })
+
+            content_type = (response.headers.get('Content-Type') or response.headers.get('content-type') or '').lower()
+            if 'html' not in content_type:
+                findings.append({
+                    'type': 'SANDBOX_NON_HTML_CONTENT',
+                    'flagged': False,
+                    'explanation': (
+                        'Final destination did not return HTML content, '
+                        'so form/script/keyword analysis was skipped.'
+                    ),
+                })
+                risk_score = _compute_risk_score(findings)
+                return {
+                    'available': True,
+                    'htmlAnalyzed': False,
+                    'fetchedUrl': resp_url,
+                    'redirectChain': redirect_chain,
+                    'matchedKeywords': [],
+                    'fakeLoginForms': [],
+                    'suspiciousScripts': [],
+                    'hiddenIframes': [],
+                    'metaRefreshUrls': [],
+                    'dataUriAbuses': [],
+                    'sslIssues': ssl_issues,
+                    'missingSecHeaders': missing_sec_headers,
+                    'redirectIssues': redirect_issues,
+                    'urlEntropyScore': url_entropy,
+                    'riskScore': risk_score,
+                    'linkXRay': {
+                        'forms': [],
+                        'externalAssetCount': 0,
+                        'hiddenIframesCount': 0,
+                        'exfiltrationSinksDetected': [],
+                    },
+                    'payloadInspection': {
+                        'credentialHarvester': {
+                            'isHttpLogin': False,
+                            'hasPasswordInput': False,
+                            'sensitiveInputsFound': [],
+                        },
+                        'clickjacking': {
+                            'hasClickjackingOverlays': False,
+                            'overlayCount': 0,
+                            'overlays': [],
+                        },
+                        'web3Drainer': {
+                            'hasWeb3DrainerSignatures': False,
+                            'detectedSignatures': [],
+                        },
+                        'driveByDownload': {
+                            'isExecutableDownload': False,
+                            'isDoubleExtension': False,
+                            'downloadFilename': None,
+                            'contentType': '',
+                            'autoDownloadAnchors': [],
+                        },
+                    },
+                }
+
+            raw_bytes = await response.content.read(SANDBOX_HTML_LIMIT * 2)
+            html = raw_bytes.decode('utf-8', errors='ignore')[:SANDBOX_HTML_LIMIT]
+            resp_headers = dict(response.headers)
+    except Exception as exc:
         if telemetry is not None:
             telemetry['io_sandbox_http_ms'] = (time.perf_counter() - t_get_start) * 1000
         findings.append({
@@ -562,105 +653,12 @@ def analyze_sandbox_preview(
         }
 
     # ------------------------------------------------------------------
-    # 4. Redirect chain analysis
-    # ------------------------------------------------------------------
-    redirect_chain = [r.url for r in response.history] + [response.url]
-    redirect_issues = _analyse_redirect_chain(response)
-    if redirect_issues:
-        findings.append({
-            'type': 'SANDBOX_SUSPICIOUS_REDIRECT_CHAIN',
-            'flagged': True,
-            'explanation': (
-                'The URL redirect chain raised concerns: '
-                + '; '.join(i['issue'] for i in redirect_issues) + '.'
-            ),
-        })
-
-    # ------------------------------------------------------------------
-    # 5. Security headers audit
-    # ------------------------------------------------------------------
-    missing_sec_headers = _analyse_security_headers(response.headers)
-    # Only flag if more than half the expected headers are absent (reduces noise
-    # for simple static sites that omit some optional headers).
-    if len(missing_sec_headers) > len(_EXPECTED_SECURITY_HEADERS) // 2:
-        findings.append({
-            'type': 'SANDBOX_WEAK_SECURITY_HEADERS',
-            'flagged': True,
-            'explanation': (
-                'The server response is missing several important security headers: '
-                + ', '.join(missing_sec_headers) + '.'
-            ),
-        })
-
-    # ------------------------------------------------------------------
-    # 6. HTML content-type guard
-    # ------------------------------------------------------------------
-    content_type = (response.headers.get('Content-Type') or response.headers.get('content-type') or '').lower()
-    if 'html' not in content_type:
-        findings.append({
-            'type': 'SANDBOX_NON_HTML_CONTENT',
-            'flagged': False,
-            'explanation': (
-                'Final destination did not return HTML content, '
-                'so form/script/keyword analysis was skipped.'
-            ),
-        })
-        risk_score = _compute_risk_score(findings)
-        return {
-            'available': True,
-            'htmlAnalyzed': False,
-            'fetchedUrl': response.url,
-            'redirectChain': redirect_chain,
-            'matchedKeywords': [],
-            'fakeLoginForms': [],
-            'suspiciousScripts': [],
-            'hiddenIframes': [],
-            'metaRefreshUrls': [],
-            'dataUriAbuses': [],
-            'sslIssues': ssl_issues,
-            'missingSecHeaders': missing_sec_headers,
-            'redirectIssues': redirect_issues,
-            'urlEntropyScore': url_entropy,
-            'riskScore': risk_score,
-            'linkXRay': {
-                'forms': [],
-                'externalAssetCount': 0,
-                'hiddenIframesCount': 0,
-                'exfiltrationSinksDetected': [],
-            },
-            'payloadInspection': {
-                'credentialHarvester': {
-                    'isHttpLogin': False,
-                    'hasPasswordInput': False,
-                    'sensitiveInputsFound': [],
-                },
-                'clickjacking': {
-                    'hasClickjackingOverlays': False,
-                    'overlayCount': 0,
-                    'overlays': [],
-                },
-                'web3Drainer': {
-                    'hasWeb3DrainerSignatures': False,
-                    'detectedSignatures': [],
-                },
-                'driveByDownload': {
-                    'isExecutableDownload': False,
-                    'isDoubleExtension': False,
-                    'downloadFilename': None,
-                    'contentType': '',
-                    'autoDownloadAnchors': [],
-                },
-            },
-        }
-
-    # ------------------------------------------------------------------
     # 7. Parse HTML
     # ------------------------------------------------------------------
     t_dom_start = time.perf_counter()
-    html = response.text[:SANDBOX_HTML_LIMIT]
     soup = BeautifulSoup(html, 'html.parser')
     page_text = soup.get_text(' ', strip=True).lower()
-    page_host = (urlparse(response.url).hostname or '').lower()
+    page_host = (urlparse(resp_url).hostname or '').lower()
     page_registered = tldextract.extract(page_host).registered_domain.lower() if page_host else ''
 
     # ------------------------------------------------------------------
@@ -680,7 +678,7 @@ def analyze_sandbox_preview(
     # ------------------------------------------------------------------
     # 9. Form Action & Link X-Ray Audit (Sub-Pillar 1.3)
     # ------------------------------------------------------------------
-    dom_audit = audit_dom_forms(soup, response.url, findings)
+    dom_audit = audit_dom_forms(soup, resp_url, findings)
     fake_login_forms: list[dict] = []
 
     for form in soup.find_all('form'):
@@ -690,7 +688,7 @@ def analyze_sandbox_preview(
             continue
 
         action_raw = (form.get('action') or '').strip()
-        action_url = urljoin(response.url, action_raw) if action_raw else response.url
+        action_url = urljoin(resp_url, action_raw) if action_raw else resp_url
         action_parsed = urlparse(action_url)
         action_host = (action_parsed.hostname or '').lower()
 
@@ -745,7 +743,7 @@ def analyze_sandbox_preview(
             if src.lower().startswith('data:'):
                 reasons.append('script src is a data: URI — executable code embedded without network fetch')
             else:
-                script_url = urljoin(response.url, src)
+                script_url = urljoin(resp_url, src)
                 hostname = (urlparse(script_url).hostname or '').lower()
                 if hostname:
                     extracted = tldextract.extract(hostname)
@@ -843,8 +841,8 @@ def analyze_sandbox_preview(
     # ------------------------------------------------------------------
     payload_inspection = dom_inspection_manager.evaluate(
         soup=soup,
-        response_headers=dict(response.headers) if response else {},
-        page_url=response.url,
+        response_headers=resp_headers,
+        page_url=resp_url,
         registered_domain=page_registered,
         findings=findings,
     )
@@ -860,7 +858,7 @@ def analyze_sandbox_preview(
     return {
         'available': True,
         'htmlAnalyzed': True,
-        'fetchedUrl': response.url,
+        'fetchedUrl': resp_url,
         'redirectChain': redirect_chain,
         'matchedKeywords': matched_keywords,
         'fakeLoginForms': fake_login_forms,
@@ -897,3 +895,17 @@ def _compute_risk_score(findings: list[dict]) -> int:
         if f.get('flagged')
     )
     return min(total, 100)
+
+
+async def analyze_sandbox_preview(
+    preview_url: str,
+    findings: list,
+    telemetry: dict | None = None,
+    session: aiohttp.ClientSession | None = None,
+) -> dict:
+    """Public async entry point for sandbox HTML preview analysis."""
+    if session is not None:
+        return await _analyze_sandbox_preview_with_session(preview_url, findings, session, telemetry)
+    async with create_scan_session(total_timeout=15.0) as local_session:
+        return await _analyze_sandbox_preview_with_session(preview_url, findings, local_session, telemetry)
+

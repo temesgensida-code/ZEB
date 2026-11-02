@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import uuid
@@ -8,9 +9,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .async_api import AsyncAPIView
+
 from .url_checks import (
     analyze_url_structure,
     check_safe_browsing,
+    create_scan_session,
     defang_url,
     normalize_url,
     refang_url,
@@ -217,11 +221,11 @@ def _build_verdict(ti_result: dict, structure_analysis: dict) -> tuple[str, str]
 	)
 
 
-class UrlSafetyCheckView(APIView):
+class UrlSafetyCheckView(AsyncAPIView):
 	authentication_classes = []
 	permission_classes = [AllowAny]
 
-	def post(self, request):
+	async def post(self, request):
 		t_view_start = time.perf_counter()
 		raw_url = request.data.get('url', '')
 		session_id = request.data.get('sessionId') or str(uuid.uuid4())
@@ -251,21 +255,19 @@ class UrlSafetyCheckView(APIView):
 		is_shortener = _is_shortener_url(target_url)
 		cpu_stage1_ms = (time.perf_counter() - t_cpu0) * 1000
 
-		# ── Stage 2: Multi-Engine Threat Intelligence ─────────────────────────
-		set_progress(session_id, 'Querying multi-engine threat intelligence feeds...')
-		t_ti0 = time.perf_counter()
-		ti_result = threat_intel_manager.evaluate(target_url)
-		threat_intel_io_ms = (time.perf_counter() - t_ti0) * 1000
-		threats = ti_result.get('threatTypes', [])
-
-		# ── Stage 3-7: URL structure, domain age, redirects, sandbox preview ──
-		set_progress(session_id, 'Analyzing URL structure...')
-		set_progress(session_id, 'Checking domain age via WHOIS...')
-		set_progress(session_id, 'Following redirect chain...')
-		set_progress(session_id, 'Running sandbox page analysis...')
-
+		# ── Stage 2-7: Parallel Dispatch of Threat Intel & Structure Analysis ──
+		set_progress(session_id, 'Querying multi-engine threat intelligence feeds & structural heuristics...')
 		telemetry = {}
-		structure_analysis = analyze_url_structure(target_url, telemetry=telemetry)
+		t_net0 = time.perf_counter()
+
+		async with create_scan_session(total_timeout=15.0) as session:
+			ti_task = asyncio.create_task(threat_intel_manager.evaluate(target_url, session=session))
+			struct_task = asyncio.create_task(analyze_url_structure(target_url, telemetry=telemetry, session=session))
+
+			ti_result, structure_analysis = await asyncio.gather(ti_task, struct_task)
+
+		threat_intel_io_ms = (time.perf_counter() - t_net0) * 1000
+		threats = ti_result.get('threatTypes', [])
 
 		# ── Stage 8: Verdict & Exposure ───────────────────────────────────────
 		t_scoring0 = time.perf_counter()
@@ -330,11 +332,11 @@ class UrlSafetyCheckView(APIView):
 		return response
 
 
-class UrlCheckProgressView(APIView):
+class UrlCheckProgressView(AsyncAPIView):
 	authentication_classes = []
 	permission_classes = [AllowAny]
 
-	def get(self, request):
+	async def get(self, request):
 		session_id = request.query_params.get('sessionId')
 		if not session_id:
 			return Response(

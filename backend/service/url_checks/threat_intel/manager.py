@@ -1,16 +1,18 @@
-import concurrent.futures
+import asyncio
 from typing import Any
+import aiohttp
 
 from .base import BaseThreatEngine, EngineResult, EngineStatus
 from .cache import ThreatIntelCache
 from .google_safe_browsing import GoogleSafeBrowsingEngine
 from .urlhaus import URLhausEngine
 from .virustotal import VirusTotalEngine
+from ..session_manager import create_scan_session
 
 
 class ThreatIntelManager:
     """
-    Coordinates multi-engine threat intelligence evaluations concurrently.
+    Coordinates multi-engine threat intelligence evaluations asynchronously.
     Provides circuit breaking, zero-panic execution, and local caching.
     """
 
@@ -26,9 +28,9 @@ class ThreatIntelManager:
             VirusTotalEngine(),
         ]
 
-    def evaluate(self, target_url: str) -> dict[str, Any]:
+    async def _evaluate_with_session(self, target_url: str, session: aiohttp.ClientSession) -> dict[str, Any]:
         """
-        Runs all threat intelligence engines in parallel and returns an aggregated result.
+        Runs all threat intelligence engines concurrently as coroutines.
         Never raises unhandled exceptions.
         """
         # 1. Check local TTL cache
@@ -38,49 +40,59 @@ class ThreatIntelManager:
             return cached_summary
 
         engines = self._get_engines()
-        results: list[EngineResult] = []
+        tasks = [
+            asyncio.create_task(engine.evaluate(target_url, session=session))
+            for engine in engines
+        ]
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_engine = {
-                executor.submit(engine.evaluate, target_url): engine
-                for engine in engines
-            }
-
-            try:
-                for future in concurrent.futures.as_completed(future_to_engine, timeout=self.overall_timeout):
-                    engine = future_to_engine[future]
+        try:
+            raw_results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=self.overall_timeout,
+            )
+        except asyncio.TimeoutError:
+            raw_results = []
+            for task, engine in zip(tasks, engines):
+                if task.done() and not task.cancelled():
                     try:
-                        res = future.result()
-                        results.append(res)
+                        raw_results.append(task.result())
                     except Exception as exc:
-                        results.append(
+                        raw_results.append(
                             EngineResult(
                                 engine_name=engine.name,
                                 status=EngineStatus.UNAVAILABLE,
                                 error_message=str(exc),
                             )
                         )
-            except concurrent.futures.TimeoutError:
-                # Mark pending futures as timed out
-                for future, engine in future_to_engine.items():
-                    if not future.done():
-                        results.append(
-                            EngineResult(
-                                engine_name=engine.name,
-                                status=EngineStatus.TIMEOUT,
-                                error_message=f'Overall TI dispatch timeout ({self.overall_timeout}s) exceeded.',
-                            )
+                else:
+                    task.cancel()
+                    raw_results.append(
+                        EngineResult(
+                            engine_name=engine.name,
+                            status=EngineStatus.TIMEOUT,
+                            error_message=f'Overall TI dispatch timeout ({self.overall_timeout}s) exceeded.',
                         )
+                    )
 
-        # Ensure all registered engines have an entry in results
-        seen_names = {r.engine_name for r in results}
-        for engine in engines:
-            if engine.name not in seen_names:
+        results: list[EngineResult] = []
+        for i, res in enumerate(raw_results):
+            engine = engines[i]
+            if isinstance(res, EngineResult):
+                results.append(res)
+            elif isinstance(res, Exception):
                 results.append(
                     EngineResult(
                         engine_name=engine.name,
-                        status=EngineStatus.TIMEOUT,
-                        error_message='Evaluation did not finish within timeout budget.',
+                        status=EngineStatus.UNAVAILABLE,
+                        error_message=str(res),
+                    )
+                )
+            else:
+                results.append(
+                    EngineResult(
+                        engine_name=engine.name,
+                        status=EngineStatus.UNAVAILABLE,
+                        error_message='Unknown evaluation result.',
                     )
                 )
 
@@ -126,3 +138,9 @@ class ThreatIntelManager:
         self.cache.set(target_url, results, summary)
 
         return summary
+
+    async def evaluate(self, target_url: str, session: aiohttp.ClientSession | None = None) -> dict[str, Any]:
+        if session is not None:
+            return await self._evaluate_with_session(target_url, session)
+        async with create_scan_session(total_timeout=self.overall_timeout + 1.0) as local_session:
+            return await self._evaluate_with_session(target_url, local_session)

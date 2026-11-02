@@ -1,5 +1,6 @@
 import json
-from urllib.request import Request, urlopen
+import aiohttp
+from ..session_manager import create_scan_session
 
 DOH_ENDPOINTS = [
     'https://cloudflare-dns.com/dns-query',
@@ -18,36 +19,57 @@ TUNNELING_PROVIDERS = frozenset({
 })
 
 
-def query_doh(name: str, record_type: str = 'A', timeout: float = 1.5) -> list[dict]:
+async def query_doh(
+    name: str,
+    record_type: str = 'A',
+    timeout: float = 1.5,
+    session: aiohttp.ClientSession | None = None,
+) -> list[dict]:
     """
-    Queries DNS-over-HTTPS JSON endpoint.
+    Queries DNS-over-HTTPS JSON endpoint asynchronously.
     Returns list of answers: [{'name': ..., 'type': 1, 'TTL': 45, 'data': '...'}]
     Never raises uncaught exceptions (zero panic).
     """
     if not name:
         return []
 
-    url = f"{DOH_ENDPOINTS[0]}?name={name}&type={record_type}"
-    req = Request(url, headers={'Accept': 'application/dns-json', 'User-Agent': 'zeb-scanner/2.0'})
-    try:
-        with urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            return data.get('Answer', [])
-    except Exception:
+    headers = {'Accept': 'application/dns-json', 'User-Agent': 'zeb-scanner/2.0'}
+    req_timeout = aiohttp.ClientTimeout(total=timeout)
+
+    async def _do_query(sess: aiohttp.ClientSession):
+        url = f"{DOH_ENDPOINTS[0]}?name={name}&type={record_type}"
+        try:
+            async with sess.get(url, headers=headers, timeout=req_timeout) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    return data.get('Answer', [])
+        except Exception:
+            pass
+
         # Failover to secondary DoH endpoint
         try:
             fallback_url = f"{DOH_ENDPOINTS[1]}?name={name}&type={record_type}"
-            req_fb = Request(fallback_url, headers={'Accept': 'application/dns-json', 'User-Agent': 'zeb-scanner/2.0'})
-            with urlopen(req_fb, timeout=timeout) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                return data.get('Answer', [])
+            async with sess.get(fallback_url, headers=headers, timeout=req_timeout) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    return data.get('Answer', [])
         except Exception:
             return []
+        return []
+
+    if session is not None:
+        return await _do_query(session)
+    async with create_scan_session(total_timeout=timeout + 1.0) as local_session:
+        return await _do_query(local_session)
 
 
-def audit_dns_and_flux(hostname: str, findings: list) -> dict:
+async def audit_dns_and_flux(
+    hostname: str,
+    findings: list,
+    session: aiohttp.ClientSession | None = None,
+) -> dict:
     """
-    Audits hostname for Dynamic DNS, reverse tunnels, and fast-flux rapid IP cycling.
+    Audits hostname for Dynamic DNS, reverse tunnels, and fast-flux rapid IP cycling asynchronously.
     """
     low_host = hostname.lower().strip()
     is_ddns = any(low_host == d or low_host.endswith(f".{d}") for d in DYNAMIC_DNS_PATTERNS)
@@ -67,7 +89,7 @@ def audit_dns_and_flux(hostname: str, findings: list) -> dict:
         })
 
     # Query A records & TTL
-    answers = query_doh(low_host, 'A')
+    answers = await query_doh(low_host, record_type='A', session=session)
     a_records = [ans.get('data') for ans in answers if ans.get('type') == 1 and ans.get('data')]
     ttls = [ans['TTL'] for ans in answers if 'TTL' in ans and isinstance(ans['TTL'], (int, float))]
 
@@ -95,20 +117,25 @@ def audit_dns_and_flux(hostname: str, findings: list) -> dict:
     }
 
 
-def audit_mx_records(registered_domain: str, matched_brand: str | None, findings: list) -> dict:
+async def audit_mx_records(
+    registered_domain: str,
+    matched_brand: str | None,
+    findings: list,
+    session: aiohttp.ClientSession | None = None,
+) -> dict:
     """
-    Audits MX and TXT/SPF records for registered_domain.
+    Audits MX and TXT/SPF records for registered_domain asynchronously.
     Flags brand impersonators without mail configuration.
     """
     if not registered_domain:
         return {'hasMx': False, 'mxHosts': [], 'hasSpf': False}
 
-    mx_answers = query_doh(registered_domain, 'MX')
+    mx_answers = await query_doh(registered_domain, record_type='MX', session=session)
     has_mx = len(mx_answers) > 0
     mx_hosts = [ans['data'].split()[-1].rstrip('.') for ans in mx_answers if 'data' in ans]
 
     # Check SPF
-    txt_answers = query_doh(registered_domain, 'TXT')
+    txt_answers = await query_doh(registered_domain, record_type='TXT', session=session)
     txt_strings = [ans.get('data', '').replace('"', '') for ans in txt_answers]
     has_spf = any('v=spf1' in t.lower() for t in txt_strings)
 

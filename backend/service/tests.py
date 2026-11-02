@@ -1,6 +1,45 @@
+import asyncio
+from unittest.mock import patch, MagicMock, AsyncMock
 from django.test import TestCase
 from bs4 import BeautifulSoup
-from unittest.mock import patch, MagicMock
+
+
+class MockAiohttpResp:
+    """Mock aiohttp HTTP client response supporting async context managers and stream reading."""
+    def __init__(self, url="", status=200, headers=None, text="", json_data=None, history=None):
+        self.url = url
+        self.status = status
+        self.status_code = status
+        self.headers = headers or {'content-type': 'text/html; charset=utf-8'}
+        self._text = text
+        self._json_data = json_data
+        self.history = history or []
+        self.content = MagicMock()
+        self.content.read = AsyncMock(return_value=text.encode('utf-8') if isinstance(text, str) else text)
+
+    async def json(self, *args, **kwargs):
+        return self._json_data or {}
+
+    async def text(self, *args, **kwargs):
+        return self._text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+
+class MockScanSessionContext:
+    """Mock context manager for create_scan_session."""
+    def __init__(self, mock_session):
+        self.mock_session = mock_session
+
+    async def __aenter__(self):
+        return self.mock_session
+
+    async def __aexit__(self, *args):
+        pass
 
 from service.url_checks.common import (
     decode_obfuscated_ip,
@@ -38,29 +77,24 @@ class Pillar1UrlExposingTests(TestCase):
         self.assertEqual(unpacked_trail[0]['encoding'], 'BASE64')
         self.assertEqual(unpacked_trail[0]['extractedUrl'], 'https://evil.xyz')
 
-    @patch('service.url_checks.redirect_chain.requests.get')
-    def test_ut_p1_2_meta_refresh_traversal(self, mock_get):
+    def test_ut_p1_2_meta_refresh_traversal(self):
         """UT-P1.2: Meta-refresh tag traversal jumps across non-3xx hops."""
-        # First hop returns HTML with meta-refresh
-        first_resp = MagicMock()
-        first_resp.url = "https://landing-page.com"
-        first_resp.status_code = 200
-        first_resp.headers = {'content-type': 'text/html'}
-        first_resp.text = '<html><head><meta http-equiv="refresh" content="0; url=https://bad.com"></head></html>'
-        first_resp.raw.read.return_value = b'<html><head><meta http-equiv="refresh" content="0; url=https://bad.com"></head></html>'
+        first_resp = MockAiohttpResp(
+            url="https://landing-page.com",
+            status=200,
+            text='<html><head><meta http-equiv="refresh" content="0; url=https://bad.com"></head></html>',
+        )
+        second_resp = MockAiohttpResp(
+            url="https://bad.com",
+            status=200,
+            text='<html><body>Logged in</body></html>',
+        )
 
-        # Second hop is target
-        second_resp = MagicMock()
-        second_resp.url = "https://bad.com"
-        second_resp.status_code = 200
-        second_resp.headers = {'content-type': 'text/html'}
-        second_resp.text = '<html><body>Logged in</body></html>'
-        second_resp.raw.read.return_value = b'<html><body>Logged in</body></html>'
-
-        mock_get.side_effect = [first_resp, second_resp]
+        mock_session = MagicMock()
+        mock_session.get.side_effect = [first_resp, second_resp]
 
         findings = []
-        result = analyze_redirect_chain("https://landing-page.com", "landing-page.com", findings)
+        result = asyncio.run(analyze_redirect_chain("https://landing-page.com", "landing-page.com", findings, session=mock_session))
         self.assertEqual(result['finalUrl'], "https://bad.com")
         self.assertTrue(any(h.get('hopType') == 'META_REFRESH' for h in result['hops']))
 
@@ -171,8 +205,8 @@ class Pillar2ThreatIntelResiliencyTests(TestCase):
         from rest_framework.test import APIClient
         self.client = APIClient()
 
-    @patch('service.views.threat_intel_manager.evaluate')
-    @patch('service.views.analyze_url_structure')
+    @patch('service.views.threat_intel_manager.evaluate', new_callable=AsyncMock)
+    @patch('service.views.analyze_url_structure', new_callable=AsyncMock)
     def test_ut_2_1_missing_google_api_key_no_panic(self, mock_structure, mock_ti):
         """UT-2.1: Missing Google API key continues pipeline with 200 OK (no HTTP 500 panic)."""
         mock_ti.return_value = {
@@ -202,48 +236,48 @@ class Pillar2ThreatIntelResiliencyTests(TestCase):
         self.assertIn('threatIntel', resp.data)
         self.assertEqual(resp.data['verdict'], 'SAFE')
 
-    @patch('service.url_checks.threat_intel.google_safe_browsing.requests.post')
-    def test_ut_2_2_google_quota_exceeded_rate_limited(self, mock_post):
+    def test_ut_2_2_google_quota_exceeded_rate_limited(self):
         """UT-2.2: Google Safe Browsing HTTP 429 returns RATE_LIMITED without raising exception."""
         from service.url_checks.threat_intel import GoogleSafeBrowsingEngine, EngineStatus
-        mock_resp = MagicMock()
-        mock_resp.status_code = 429
-        mock_post.return_value = mock_resp
+        mock_resp = MockAiohttpResp('', status=429)
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_resp
 
         engine = GoogleSafeBrowsingEngine(api_key='fake_key')
-        res = engine.evaluate('https://example.com')
+        res = asyncio.run(engine.evaluate('https://example.com', session=mock_session))
         self.assertEqual(res.status, EngineStatus.RATE_LIMITED)
         self.assertFalse(res.is_threat)
         self.assertIn('quota exceeded', res.error_message.lower())
 
-    @patch('service.url_checks.threat_intel.urlhaus.requests.post')
-    def test_ut_2_3_network_timeout_clean_handling(self, mock_post):
+    def test_ut_2_3_network_timeout_clean_handling(self):
         """UT-2.3: Upstream network timeout handled cleanly with TIMEOUT status."""
-        import requests
         from service.url_checks.threat_intel import URLhausEngine, EngineStatus
-        mock_post.side_effect = requests.exceptions.Timeout("Connection timed out")
+        mock_session = MagicMock()
+        mock_session.post.side_effect = asyncio.TimeoutError("Connection timed out")
 
         engine = URLhausEngine()
-        res = engine.evaluate('https://example.com')
+        res = asyncio.run(engine.evaluate('https://example.com', session=mock_session))
         self.assertEqual(res.status, EngineStatus.TIMEOUT)
         self.assertFalse(res.is_threat)
 
-    @patch('service.url_checks.threat_intel.urlhaus.requests.post')
-    def test_ut_2_4_known_malware_urlhaus(self, mock_post):
+    def test_ut_2_4_known_malware_urlhaus(self):
         """UT-2.4: Known malware cataloged on URLhaus sets is_threat=True and high confidence."""
         from service.url_checks.threat_intel import URLhausEngine, EngineStatus
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            'query_status': 'ok',
-            'threat': 'malware_download',
-            'url_status': 'online',
-            'reporter': 'abuse_ch',
-        }
-        mock_post.return_value = mock_resp
+        mock_resp = MockAiohttpResp(
+            'https://urlhaus-api.abuse.ch/v1/url/',
+            status=200,
+            json_data={
+                'query_status': 'ok',
+                'threat': 'malware_download',
+                'url_status': 'online',
+                'reporter': 'abuse_ch',
+            },
+        )
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_resp
 
         engine = URLhausEngine()
-        res = engine.evaluate('https://malware-drop.com/bad.exe')
+        res = asyncio.run(engine.evaluate('https://malware-drop.com/bad.exe', session=mock_session))
         self.assertEqual(res.status, EngineStatus.HEALTHY)
         self.assertTrue(res.is_threat)
         self.assertIn('URLHAUS_MALWARE_DOWNLOAD', res.threat_types)
@@ -254,13 +288,13 @@ class Pillar2ThreatIntelResiliencyTests(TestCase):
         manager = ThreatIntelManager()
         e1 = MagicMock()
         e1.name = 'Google Safe Browsing'
-        e1.evaluate.return_value = EngineResult(engine_name='Google Safe Browsing', status=EngineStatus.UNAVAILABLE)
+        e1.evaluate = AsyncMock(return_value=EngineResult(engine_name='Google Safe Browsing', status=EngineStatus.UNAVAILABLE))
         e2 = MagicMock()
         e2.name = 'URLhaus'
-        e2.evaluate.return_value = EngineResult(engine_name='URLhaus', status=EngineStatus.UNAVAILABLE)
+        e2.evaluate = AsyncMock(return_value=EngineResult(engine_name='URLhaus', status=EngineStatus.UNAVAILABLE))
 
         with patch.object(manager, '_get_engines', return_value=[e1, e2]):
-            summary = manager.evaluate('https://offline-test.com')
+            summary = asyncio.run(manager.evaluate('https://offline-test.com'))
             self.assertTrue(summary['evaluationDegraded'])
             self.assertEqual(summary['healthyEnginesCount'], 0)
             self.assertFalse(summary['isThreat'])
@@ -271,15 +305,15 @@ class Pillar2ThreatIntelResiliencyTests(TestCase):
         manager = ThreatIntelManager(cache_ttl=60)
         e1 = MagicMock()
         e1.name = 'URLhaus'
-        e1.evaluate.return_value = EngineResult(engine_name='URLhaus', status=EngineStatus.HEALTHY, is_threat=False)
+        e1.evaluate = AsyncMock(return_value=EngineResult(engine_name='URLhaus', status=EngineStatus.HEALTHY, is_threat=False))
 
         with patch.object(manager, '_get_engines', return_value=[e1]):
             url = 'https://cached-target.com'
-            first_res = manager.evaluate(url)
+            first_res = asyncio.run(manager.evaluate(url))
             self.assertEqual(e1.evaluate.call_count, 1)
 
             # Second call should hit cache and not call evaluate again
-            second_res = manager.evaluate(url)
+            second_res = asyncio.run(manager.evaluate(url))
             self.assertEqual(e1.evaluate.call_count, 1)
             self.assertEqual(first_res, second_res)
 
@@ -289,7 +323,7 @@ class Pillar3InfrastructureTests(TestCase):
     Unit tests for Pillar 3: Infrastructure, Network & DNS Threat Evaluation (UT-3.1 to UT-3.6).
     """
 
-    @patch('service.url_checks.infrastructure.dns_audit.query_doh')
+    @patch('service.url_checks.infrastructure.dns_audit.query_doh', new_callable=AsyncMock)
     def test_ut_3_1_fast_flux_network_detection(self, mock_doh):
         """UT-3.1: Host with low TTL (<60s) and multiple distinct subnets is flagged as FAST_FLUX_NETWORK."""
         from service.url_checks.infrastructure import audit_dns_and_flux
@@ -299,36 +333,35 @@ class Pillar3InfrastructureTests(TestCase):
             {'name': 'flux.site', 'type': 1, 'TTL': 20, 'data': '10.20.1.12'},
         ]
         findings = []
-        res = audit_dns_and_flux('flux.site', findings)
+        res = asyncio.run(audit_dns_and_flux('flux.site', findings))
         self.assertTrue(res['isFastFlux'])
         self.assertEqual(res['minTtl'], 20)
         self.assertTrue(any(f['type'] == 'FAST_FLUX_NETWORK' for f in findings))
 
-    @patch('service.url_checks.infrastructure.dns_audit.query_doh', return_value=[])
+    @patch('service.url_checks.infrastructure.dns_audit.query_doh', new_callable=AsyncMock, return_value=[])
     def test_ut_3_2_dynamic_dns_risk(self, mock_doh):
         """UT-3.2: Host on known Dynamic DNS provider is flagged."""
         from service.url_checks.infrastructure import audit_dns_and_flux
         findings = []
-        res = audit_dns_and_flux('victim-login.duckdns.org', findings)
+        res = asyncio.run(audit_dns_and_flux('victim-login.duckdns.org', findings))
         self.assertTrue(res['isDynamicDns'])
         self.assertTrue(any(f['type'] == 'DYNAMIC_DNS_RISK' for f in findings))
 
-    @patch('service.url_checks.infrastructure.dns_audit.query_doh', return_value=[])
+    @patch('service.url_checks.infrastructure.dns_audit.query_doh', new_callable=AsyncMock, return_value=[])
     def test_ut_3_3_reverse_tunnel_risk(self, mock_doh):
         """UT-3.3: Host on reverse tunneling provider is flagged."""
         from service.url_checks.infrastructure import audit_dns_and_flux
         findings = []
-        res = audit_dns_and_flux('my-payload.ngrok-free.app', findings)
+        res = asyncio.run(audit_dns_and_flux('my-payload.ngrok-free.app', findings))
         self.assertTrue(res['isTunnel'])
         self.assertTrue(any(f['type'] == 'REVERSE_TUNNEL_RISK' for f in findings))
 
-    @patch('service.url_checks.infrastructure.dns_audit.query_doh')
+    @patch('service.url_checks.infrastructure.dns_audit.query_doh', new_callable=AsyncMock, return_value=[])
     def test_ut_3_4_brand_spoof_no_mx(self, mock_doh):
         """UT-3.4: Brand impersonating domain with no MX records is flagged as BRAND_SPOOF_NO_MX."""
         from service.url_checks.infrastructure import audit_mx_records
-        mock_doh.return_value = []  # No MX records
         findings = []
-        res = audit_mx_records('paypal-security-update.com', 'paypal', findings)
+        res = asyncio.run(audit_mx_records('paypal-security-update.com', 'paypal', findings))
         self.assertFalse(res['hasMx'])
         self.assertTrue(any(f['type'] == 'BRAND_SPOOF_NO_MX' for f in findings))
 
@@ -376,11 +409,11 @@ class Pillar3InfrastructureTests(TestCase):
              patch('service.url_checks.infrastructure.manager.deep_audit_ssl', side_effect=Exception('SSL down')):
 
             findings = []
-            res = manager.evaluate(
+            res = asyncio.run(manager.evaluate(
                 hostname='unreachable-host.example',
                 registered_domain='unreachable-host.example',
                 findings=findings,
-            )
+            ))
             self.assertIn('dns', res)
             self.assertIn('asn', res)
             self.assertFalse(res['asn']['available'])
@@ -498,7 +531,7 @@ class Pillar4DynamicSandboxTests(TestCase):
         """UT-4.1: Desktop 404 vs Mobile 200 flags ANTI_ANALYSIS_CLOAKING_DETECTED."""
         from service.url_checks.dynamic_sandbox import audit_multi_vantage_cloaking
 
-        def side_effect(url, headers, timeout=1.8):
+        async def side_effect(url, headers, timeout=1.8, session=None):
             ua = headers.get('User-Agent', '')
             if 'iPhone' in ua:
                 return {'status': 200, 'length': 45000, 'snippet': 'Login', 'error': None}
@@ -509,7 +542,7 @@ class Pillar4DynamicSandboxTests(TestCase):
 
         mock_probe.side_effect = side_effect
         findings = []
-        res = audit_multi_vantage_cloaking("https://cloaked-phish.xyz", findings)
+        res = asyncio.run(audit_multi_vantage_cloaking("https://cloaked-phish.xyz", findings))
         self.assertTrue(res['cloakingDetected'])
         self.assertEqual(res['discrepancyType'], 'STATUS_MISMATCH')
         self.assertTrue(any(f['type'] == 'ANTI_ANALYSIS_CLOAKING_DETECTED' for f in findings))
@@ -552,10 +585,10 @@ class Pillar4DynamicSandboxTests(TestCase):
         }
 
         with patch.object(manager.worker, 'run_sandbox_session', return_value=mock_worker_result), \
-             patch('service.url_checks.dynamic_sandbox.manager.audit_multi_vantage_cloaking', return_value={'cloakingDetected': False}):
+             patch('service.url_checks.dynamic_sandbox.manager.audit_multi_vantage_cloaking', new_callable=AsyncMock, return_value={'cloakingDetected': False}):
 
             findings = []
-            res = manager.evaluate("https://dynamic-drop.org", "dynamic-drop.org", findings)
+            res = asyncio.run(manager.evaluate("https://dynamic-drop.org", "dynamic-drop.org", findings))
             self.assertTrue(res['headlessWorkerExecuted'])
             self.assertEqual(len(res['networkHarvester']['suspiciousBackgroundExfiltration']), 1)
             self.assertTrue(any(f['type'] == 'EXFILTRATION_SINK_DETECTED' for f in findings))
@@ -567,10 +600,10 @@ class Pillar4DynamicSandboxTests(TestCase):
 
         # Mock is_available returning False
         with patch.object(manager.worker, 'is_available', return_value=False), \
-             patch('service.url_checks.dynamic_sandbox.manager.audit_multi_vantage_cloaking', return_value={'cloakingDetected': False}):
+             patch('service.url_checks.dynamic_sandbox.manager.audit_multi_vantage_cloaking', new_callable=AsyncMock, return_value={'cloakingDetected': False}):
 
             findings = []
-            res = manager.evaluate("https://offline-playwright.org", "offline-playwright.org", findings)
+            res = asyncio.run(manager.evaluate("https://offline-playwright.org", "offline-playwright.org", findings))
             self.assertFalse(res['headlessWorkerExecuted'])
             self.assertFalse(res['screenshot']['available'])
             self.assertIn('executionTimeMs', res)
@@ -699,27 +732,27 @@ class SandboxPreviewRegressionTests(TestCase):
     and verifying consistent dictionary return structures for HTML and non-HTML payloads.
     """
 
-    @patch('service.url_checks.sandbox_preview.requests.get')
-    def test_analyze_sandbox_preview_html_evaluation_success(self, mock_get):
+    def test_analyze_sandbox_preview_html_evaluation_success(self):
         """Verify analyze_sandbox_preview evaluates HTML pages without NameError: page_registered."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.headers = {'content-type': 'text/html; charset=utf-8'}
-        mock_resp.url = 'https://secure-login.example.com/login'
-        mock_resp.text = (
-            '<html><head><title>Sign In</title></head><body>'
-            '<form action="/auth" method="POST">'
-            '<input type="text" name="username">'
-            '<input type="password" name="password">'
-            '<input type="text" name="ssn">'
-            '</form>'
-            '</body></html>'
+        mock_resp = MockAiohttpResp(
+            url='https://secure-login.example.com/login',
+            status=200,
+            headers={'content-type': 'text/html; charset=utf-8'},
+            text=(
+                '<html><head><title>Sign In</title></head><body>'
+                '<form action="/auth" method="POST">'
+                '<input type="text" name="username">'
+                '<input type="password" name="password">'
+                '<input type="text" name="ssn">'
+                '</form>'
+                '</body></html>'
+            ),
         )
-        mock_resp.history = []
-        mock_get.return_value = mock_resp
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
 
         findings = []
-        res = analyze_sandbox_preview('https://secure-login.example.com/login', findings)
+        res = asyncio.run(analyze_sandbox_preview('https://secure-login.example.com/login', findings, session=mock_session))
 
         self.assertTrue(res['available'])
         self.assertTrue(res['htmlAnalyzed'])
@@ -729,46 +762,48 @@ class SandboxPreviewRegressionTests(TestCase):
         self.assertIn('linkXRay', res)
         self.assertIn('forms', res['linkXRay'])
 
-    @patch('service.url_checks.sandbox_preview.requests.get')
-    def test_analyze_sandbox_preview_non_html_response(self, mock_get):
+    def test_analyze_sandbox_preview_non_html_response(self):
         """Verify analyze_sandbox_preview handles non-HTML content with fallback keys."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.headers = {'content-type': 'application/pdf'}
-        mock_resp.url = 'https://example.com/document.pdf'
-        mock_resp.text = '%PDF-1.4 binary content'
-        mock_resp.history = []
-        mock_get.return_value = mock_resp
+        mock_resp = MockAiohttpResp(
+            url='https://example.com/document.pdf',
+            status=200,
+            headers={'content-type': 'application/pdf'},
+            text='%PDF-1.4 binary content',
+        )
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
 
         findings = []
-        res = analyze_sandbox_preview('https://example.com/document.pdf', findings)
+        res = asyncio.run(analyze_sandbox_preview('https://example.com/document.pdf', findings, session=mock_session))
 
         self.assertTrue(res['available'])
         self.assertFalse(res['htmlAnalyzed'])
         self.assertIn('payloadInspection', res)
         self.assertIn('linkXRay', res)
 
-    @patch('service.url_checks.sandbox_preview.requests.get')
-    def test_check_url_api_endpoint_sandbox_integration(self, mock_get):
+    def test_check_url_api_endpoint_sandbox_integration(self):
         """Verify POST /api/check-url/ successfully finishes and returns 200 without crashing."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.headers = {'content-type': 'text/html'}
-        mock_resp.url = 'https://portal.example.org/'
-        mock_resp.text = '<html><head><title>Home</title></head><body>Welcome</body></html>'
-        mock_resp.history = []
-        mock_get.return_value = mock_resp
-
-        resp = self.client.post(
-            '/api/check-url/',
-            {'url': 'https://portal.example.org/'},
-            content_type='application/json',
+        mock_resp = MockAiohttpResp(
+            url='https://portal.example.org/',
+            status=200,
+            headers={'content-type': 'text/html'},
+            text='<html><head><title>Home</title></head><body>Welcome</body></html>',
         )
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertIn('structureAnalysis', data)
-        self.assertIn('sandboxPreview', data['structureAnalysis'])
-        self.assertIn('payloadInspection', data['structureAnalysis']['sandboxPreview'])
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_resp
+        mock_session.post.return_value = mock_resp
+
+        with patch('service.views.create_scan_session', return_value=MockScanSessionContext(mock_session)):
+            resp = self.client.post(
+                '/api/check-url/',
+                {'url': 'https://portal.example.org/'},
+                content_type='application/json',
+            )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertIn('structureAnalysis', data)
+            self.assertIn('sandboxPreview', data['structureAnalysis'])
+            self.assertIn('payloadInspection', data['structureAnalysis']['sandboxPreview'])
 
 
 class DeveloperAuthAndKeyPolicyTests(TestCase):
