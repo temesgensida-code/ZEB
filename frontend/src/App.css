@@ -2796,3 +2796,194 @@
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   margin-top: 8px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ASYNCHRONOUS STREAMING INSPECTION & LIVE CARD ILLUMINATION
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.badge-prominent-inspecting {
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+  gap: 8px;
+}
+
+.status-inspecting {
+  border-color: var(--border-primary);
+}
+
+.stream-progress-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--btn-shadow);
+}
+
+.stream-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stream-counter-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-primary);
+  animation: pulse-ring 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.3);
+  }
+}
+
+.stream-engine-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stream-mini-badge {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border-muted);
+  color: var(--text-secondary);
+}
+
+.stream-mini-badge.badge-clean {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.stream-mini-badge.badge-flagged {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.stream-mini-badge.badge-degraded {
+  background-color: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+}
+
+.stream-mini-badge.badge-pending {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+.stream-progress-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background-color: var(--bg-inset);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.stream-progress-fill {
+  height: 100%;
+  background: var(--text-primary);
+  border-radius: 2px;
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Card Illumination Snap */
+@keyframes card-illuminate-snap {
+  0% {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 10px rgba(125, 125, 125, 0.35);
+  }
+  100% {
+    border-color: var(--border-primary);
+    box-shadow: var(--btn-shadow);
+  }
+}
+
+.card-illuminated {
+  animation: card-illuminate-snap 0.5s ease-out;
+}
+
+/* Critical Escalation Banner */
+.critical-escalation-banner {
+  border-left: 4px solid #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+.critical-escalation-banner .threat-badge {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+/* Engine Status Micro Badge in Accordion Title */
+.engine-status-badge {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-left: 6px;
+  border: 1px solid var(--border-muted);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+}
+
+.engine-status-badge.badge-clean {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.engine-status-badge.badge-flagged {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.stream-pending-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  border-radius: var(--radius-xs);
+  border: 1px dashed var(--border-muted);
+}
+

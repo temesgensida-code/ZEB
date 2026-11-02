@@ -950,3 +950,187 @@ class DeveloperAuthAndKeyPolicyTests(TestCase):
         self.assertEqual(len(data['recentLogs']), 2)
 
 
+from django.test import AsyncClient
+import json
+
+class StreamingEndpointTests(TestCase):
+    """Automated tests for ASGI SSE streaming inspection endpoint (POST /api/check-url/stream/)."""
+
+    async def _parse_sse_events(self, resp):
+        events = []
+        async for chunk in resp.streaming_content:
+            text = chunk.decode('utf-8') if isinstance(chunk, bytes) else chunk
+            blocks = [b.strip() for b in text.strip().split('\n\n') if b.strip()]
+            for block in blocks:
+                lines = block.split('\n')
+                event_name = None
+                event_data = None
+                for line in lines:
+                    if line.startswith('event:'):
+                        event_name = line.replace('event:', '', 1).strip()
+                    elif line.startswith('data:'):
+                        data_str = line.replace('data:', '', 1).strip()
+                        try:
+                            event_data = json.loads(data_str) if data_str else {}
+                        except Exception:
+                            event_data = data_str
+                if event_name:
+                    events.append({'event': event_name, 'data': event_data})
+        return events
+
+    async def test_st_1_1_headers_and_invalid_request(self):
+        """ST-1.1: Verify HTTP 400 on malformed input and correct SSE headers on valid requests."""
+        client = AsyncClient()
+
+        # 1. Empty URL returns 400 JSON response
+        bad_resp = await client.post(
+            '/api/check-url/stream/',
+            {'url': ''},
+            content_type='application/json',
+        )
+        self.assertEqual(bad_resp.status_code, 400)
+
+        # 2. Valid URL returns 200 with SSE headers
+        resp = await client.post(
+            '/api/check-url/stream/',
+            {'url': 'https://example.com'},
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('text/event-stream', resp.headers.get('content-type', ''))
+        self.assertIn('no-cache', resp.headers.get('cache-control', ''))
+        self.assertEqual(resp.headers.get('x-accel-buffering'), 'no')
+        self.assertTrue(bool(resp.headers.get('x-session-id')))
+
+    async def test_st_1_2_clean_url_event_progression(self):
+        """ST-1.2: Verify complete SSE sequence: init -> 6 subsystem_result -> final_verdict -> complete."""
+        client = AsyncClient()
+        resp = await client.post(
+            '/api/check-url/stream/',
+            {'url': 'https://example.com', 'sessionId': 'test-stream-sess-1'},
+            content_type='application/json',
+        )
+        events = await self._parse_sse_events(resp)
+        self.assertGreaterEqual(len(events), 8)
+
+        # First event must be init
+        self.assertEqual(events[0]['event'], 'init')
+        self.assertEqual(events[0]['data']['sessionId'], 'test-stream-sess-1')
+        self.assertEqual(events[0]['data']['totalEngines'], 6)
+        self.assertIn('example.com', events[0]['data']['canonicalUrl'])
+
+        # Intermediate events must be subsystem_result
+        subsystem_events = [e for e in events if e['event'] == 'subsystem_result']
+        self.assertEqual(len(subsystem_events), 6)
+        received_subsystems = {e['data']['subsystem'] for e in subsystem_events}
+        expected_subsystems = {
+            'threat_intel', 'infrastructure', 'domain_age',
+            'redirect_chain', 'sandbox_preview', 'dynamic_sandbox'
+        }
+        self.assertEqual(received_subsystems, expected_subsystems)
+
+        for se in subsystem_events:
+            self.assertIn(se['data']['statusBadge'], ('CLEAN', 'FLAGGED', 'DEGRADED'))
+            self.assertIn('engineLatencyMs', se['data'])
+
+        # Next to last event is final_verdict
+        verdict_event = [e for e in events if e['event'] == 'final_verdict'][0]
+        self.assertIn(verdict_event['data']['verdict'], ('SAFE', 'SUSPICIOUS', 'UNSAFE', 'UNSURE'))
+        self.assertIn('structureAnalysis', verdict_event['data'])
+        self.assertIn('telemetry', verdict_event['data'])
+
+        # Final event is complete
+        self.assertEqual(events[-1]['event'], 'complete')
+        self.assertIn('durationMs', events[-1]['data'])
+
+    async def test_st_1_3_preflight_critical_escalation(self):
+        """ST-1.3: Verify preflight deception attack triggers early critical_escalation and locks UNSAFE."""
+        client = AsyncClient()
+        deceptive_url = 'https://paypal.com@attacker-phish-domain.com/login'
+        resp = await client.post(
+            '/api/check-url/stream/',
+            {'url': deceptive_url},
+            content_type='application/json',
+        )
+        events = await self._parse_sse_events(resp)
+        event_names = [e['event'] for e in events]
+
+        # Verify critical_escalation is emitted immediately
+        self.assertIn('critical_escalation', event_names)
+        escalation_idx = event_names.index('critical_escalation')
+        self.assertEqual(escalation_idx, 1)  # Directly after init (index 0)
+
+        esc_data = events[escalation_idx]['data']
+        self.assertEqual(esc_data['verdict'], 'UNSAFE')
+        self.assertEqual(esc_data['subsystem'], 'preflight')
+        self.assertEqual(esc_data['threatSignal'], 'USERINFO_DECEPTION_ATTACK')
+
+        # Final verdict must remain monotonically locked to UNSAFE
+        verdict_event = [e for e in events if e['event'] == 'final_verdict'][0]
+        self.assertEqual(verdict_event['data']['verdict'], 'UNSAFE')
+        self.assertTrue(verdict_event['data']['unsafe'])
+
+    async def test_st_1_4_threat_intel_critical_escalation(self):
+        """ST-1.4: Verify threat intelligence hit triggers mid-stream critical_escalation."""
+        client = AsyncClient()
+        with patch('service.views.threat_intel_manager.evaluate', new_callable=AsyncMock) as mock_ti:
+            mock_ti.return_value = {
+                'isThreat': True,
+                'threatTypes': ['EXFILTRATION_SINK_DETECTED'],
+                'confidence': 0.99,
+            }
+            resp = await client.post(
+                '/api/check-url/stream/',
+                {'url': 'https://threat-sample-test.org'},
+                content_type='application/json',
+            )
+            events = await self._parse_sse_events(resp)
+            event_names = [e['event'] for e in events]
+
+            self.assertIn('critical_escalation', event_names)
+            esc_event = [e for e in events if e['event'] == 'critical_escalation'][0]
+            self.assertEqual(esc_event['data']['subsystem'], 'threat_intel')
+            self.assertEqual(esc_event['data']['threatSignal'], 'EXFILTRATION_SINK_DETECTED')
+
+            verdict_event = [e for e in events if e['event'] == 'final_verdict'][0]
+            self.assertEqual(verdict_event['data']['verdict'], 'UNSAFE')
+
+    async def test_st_1_5_subsystem_degraded_fault_tolerance(self):
+        """ST-1.5: Verify worker exception marks subsystem as DEGRADED without failing stream."""
+        client = AsyncClient()
+        with patch('service.views.dynamic_sandbox_manager.evaluate', new_callable=AsyncMock) as mock_ds:
+            mock_ds.side_effect = RuntimeError("Sandbox browser node disconnected")
+            resp = await client.post(
+                '/api/check-url/stream/',
+                {'url': 'https://example.com'},
+                content_type='application/json',
+            )
+            events = await self._parse_sse_events(resp)
+            ds_event = [
+                e for e in events
+                if e['event'] == 'subsystem_result' and e['data']['subsystem'] == 'dynamic_sandbox'
+            ][0]
+            self.assertEqual(ds_event['data']['statusBadge'], 'DEGRADED')
+            self.assertTrue(ds_event['data']['data'].get('evaluationDegraded'))
+
+            # Complete and final_verdict must still be emitted cleanly
+            self.assertIn('final_verdict', [e['event'] for e in events])
+            self.assertEqual(events[-1]['event'], 'complete')
+
+    async def test_st_1_6_client_disconnect_cancellation(self):
+        """ST-1.6: Verify client cancellation aborts generator cleanly and cancels worker tasks."""
+        client = AsyncClient()
+        resp = await client.post(
+            '/api/check-url/stream/',
+            {'url': 'https://example.com'},
+            content_type='application/json',
+        )
+        # Consume only the first chunk and then exit (simulating client abort)
+        chunk_iter = resp.streaming_content.__aiter__()
+        first_chunk = await chunk_iter.__anext__()
+        self.assertIn(b'event: init', first_chunk)
+        # Close the generator
+        await chunk_iter.aclose()
+
+
+

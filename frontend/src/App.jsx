@@ -181,10 +181,10 @@ function ProgressBar({ currentStageLabel }) {
 }
 
 // ─── Collapsible Accordion Section ───────────────────────────────────────────
-function CollapsibleSection({ title, icon, flaggedCount, defaultOpen = false, children }) {
+function CollapsibleSection({ title, icon, flaggedCount, defaultOpen = false, className = '', engineBadge = null, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="accordion-section">
+    <div className={`accordion-section ${className}`}>
       <button
         type="button"
         className="accordion-trigger"
@@ -194,6 +194,11 @@ function CollapsibleSection({ title, icon, flaggedCount, defaultOpen = false, ch
         <div className="accordion-title-cluster">
           <span className="accordion-section-icon">{icon}</span>
           <span className="accordion-section-label">{title}</span>
+          {engineBadge && (
+            <span className={`engine-status-badge ${engineBadge.className || ''}`}>
+              {engineBadge.text}
+            </span>
+          )}
           {flaggedCount > 0 && (
             <span className="section-flag-badge">
               <WarningCircle size={12} weight="bold" /> {flaggedCount} {flaggedCount === 1 ? 'flag' : 'flags'}
@@ -299,7 +304,7 @@ function InfoModal({ onClose }) {
 }
 
 // ─── Results Presentation Component ──────────────────────────────────────────
-function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport }) {
+function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenExportReport }) {
   const [copiedKey, setCopiedKey] = useState(null)
   const { url, verdict, message, threats, structureAnalysis } = result
   const sa = structureAnalysis || {}
@@ -314,6 +319,8 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
 
   const isSafe = verdict === 'SAFE'
   const isUnsafe = verdict === 'UNSAFE'
+  const isInspecting = verdict === 'INSPECTING...' || (streamState && streamState.isStreaming && !isUnsafe)
+  const statusClass = isUnsafe ? 'status-unsafe' : isSafe ? 'status-safe' : isInspecting ? 'status-inspecting' : 'status-unsure'
 
   const flaggedFindingsCount = sa.findings?.filter(f => f.flagged).length || 0
   const hasShortener = redirect.passedThroughShortener || redirect.hops?.some(h => h.isShortener)
@@ -327,16 +334,82 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
   }
 
   return (
-    <div className={`results-shell ${isSafe ? 'status-safe' : isUnsafe ? 'status-unsafe' : 'status-unsure'}`}>
+    <div className={`results-shell ${statusClass}`}>
+      {/* Real-time Concurrent Engine Streaming Progress Banner */}
+      {streamState?.isStreaming && (
+        <div className="stream-progress-banner">
+          <div className="stream-banner-header">
+            <div className="stream-counter-text">
+              <span className="pulse-dot" />
+              <span>CONCURRENT HEURISTICS AUDIT: {streamState.verifiedCount} / {streamState.totalEngines} ENGINES VERIFIED</span>
+            </div>
+            <div className="stream-engine-badges">
+              {Object.entries(streamState.subsystems || {}).map(([key, sub]) => {
+                const badgeType = sub.badge ? sub.badge.toLowerCase() : (sub.status === 'AUDITED' ? 'clean' : 'pending')
+                const label = key.replace('_', ' ').toUpperCase()
+                return (
+                  <span key={key} className={`stream-mini-badge badge-${badgeType}`}>
+                    {label}: {sub.badge || (sub.status === 'AUDITED' ? 'OK' : '...')}
+                    {sub.latencyMs ? ` (${sub.latencyMs}ms)` : ''}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+          <div className="stream-progress-track">
+            <div
+              className="stream-progress-fill"
+              style={{ width: `${Math.min(100, ((streamState.verifiedCount || 0) / (streamState.totalEngines || 6)) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Monotonic Security Escalation Banner */}
+      {streamState?.criticalEscalation && (
+        <div className="threat-module critical-escalation-banner" role="alert" style={{ marginBottom: 16 }}>
+          <div className="threat-module-title">
+            <ShieldSlash size={16} weight="bold" />
+            <span>Monotonic Security Escalation: Critical Threat Signature Identified</span>
+          </div>
+          <div className="threat-record">
+            <div className="threat-record-header">
+              <span className="threat-badge">{streamState.criticalEscalation.threatSignal}</span>
+              <span className="threat-platform">Subsystem: {String(streamState.criticalEscalation.subsystem).toUpperCase()}</span>
+            </div>
+            <p className="threat-explanation">{streamState.criticalEscalation.explanation}</p>
+          </div>
+        </div>
+      )}
+
       {/* Pillar 6.1: Interactive Link Dissector */}
       <LinkDissector url={url} structureAnalysis={structureAnalysis} />
 
       {/* Top Verdict Hero */}
       <div className="verdict-hero">
         <div className="verdict-header-row">
-          <div className={`verdict-badge-prominent ${isSafe ? 'badge-prominent-safe' : isUnsafe ? 'badge-prominent-unsafe' : 'badge-prominent-unsure'}`}>
-            {isSafe ? <ShieldCheck size={20} weight="bold" /> : isUnsafe ? <ShieldSlash size={20} weight="bold" /> : <ShieldWarning size={20} weight="bold" />}
-            <span>VERDICT: {verdict}</span>
+          <div className={`verdict-badge-prominent ${isUnsafe ? 'badge-prominent-unsafe' : isSafe ? 'badge-prominent-safe' : isInspecting ? 'badge-prominent-inspecting' : 'badge-prominent-unsure'}`}>
+            {isUnsafe ? (
+              <>
+                <ShieldSlash size={20} weight="bold" />
+                <span>VERDICT: UNSAFE</span>
+              </>
+            ) : isSafe ? (
+              <>
+                <ShieldCheck size={20} weight="bold" />
+                <span>VERDICT: SAFE</span>
+              </>
+            ) : isInspecting ? (
+              <>
+                <span className="micro-spinner" />
+                <span>VERDICT: AUDITING HEURISTICS...</span>
+              </>
+            ) : (
+              <>
+                <ShieldWarning size={20} weight="bold" />
+                <span>VERDICT: {verdict}</span>
+              </>
+            )}
           </div>
 
           <div className="quick-stats-strip">
@@ -580,6 +653,8 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
           icon={<Globe size={16} weight="bold" />}
           flaggedCount={flaggedFindingsCount}
           defaultOpen={true}
+          className={streamState?.lastAuditedSubsystem === 'domain_age' ? 'card-illuminated' : ''}
+          engineBadge={streamState?.subsystems?.domain_age?.badge ? { text: `WHOIS: ${streamState.subsystems.domain_age.badge}`, className: `badge-${streamState.subsystems.domain_age.badge.toLowerCase()}` } : null}
         >
           <div className="metric-tiles-grid">
             <div className="metric-tile">
@@ -632,6 +707,8 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
           icon={<Database size={16} weight="bold" />}
           flaggedCount={infra.asnInfo?.isHighAbuse || infra.dnsAudit?.fastFluxDetected || infra.sslAudit?.isVeryRecent ? 1 : 0}
           defaultOpen={false}
+          className={streamState?.lastAuditedSubsystem === 'infrastructure' ? 'card-illuminated' : ''}
+          engineBadge={streamState?.subsystems?.infrastructure?.badge ? { text: `DNS/ASN: ${streamState.subsystems.infrastructure.badge}`, className: `badge-${streamState.subsystems.infrastructure.badge.toLowerCase()}` } : null}
         >
           <div className="metric-tiles-grid">
             <div className="metric-tile">
@@ -677,6 +754,8 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
           icon={<Code size={16} weight="bold" />}
           flaggedCount={sandbox.riskScore >= 25 ? 1 : 0}
           defaultOpen={sandbox.riskScore >= 25}
+          className={streamState?.lastAuditedSubsystem === 'sandbox_preview' ? 'card-illuminated' : ''}
+          engineBadge={streamState?.subsystems?.sandbox_preview?.badge ? { text: `DOM: ${streamState.subsystems.sandbox_preview.badge}`, className: `badge-${streamState.subsystems.sandbox_preview.badge.toLowerCase()}` } : null}
         >
           {sandbox.available ? (
             <div>
@@ -763,6 +842,8 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
           icon={<ShareNetwork size={16} weight="bold" />}
           flaggedCount={redirect.tooManyRedirects || redirect.hops?.some(h => h.suspicious) ? 1 : 0}
           defaultOpen={false}
+          className={streamState?.lastAuditedSubsystem === 'redirect_chain' ? 'card-illuminated' : ''}
+          engineBadge={streamState?.subsystems?.redirect_chain?.badge ? { text: `HOPS: ${streamState.subsystems.redirect_chain.badge}`, className: `badge-${streamState.subsystems.redirect_chain.badge.toLowerCase()}` } : null}
         >
           {redirect.tooManyRedirects && (
             <div className="finding-row flagged" style={{ marginBottom: 12 }}>
@@ -800,7 +881,10 @@ function ResultsView({ result, onReset, onOpenSafePreview, onOpenExportReport })
       {/* Bottom Action Bar */}
       <div className="report-action-bar">
         <span className="report-notice-text">
-          <Info size={14} weight="bold" /> Automated passive safety audit complete.
+          <Info size={14} weight="bold" />{' '}
+          {streamState?.isStreaming
+            ? 'Asynchronous safety stream active — heuristics resolving sequentially.'
+            : 'Automated passive safety audit complete.'}
         </span>
 
         <div className="report-btns-group">
@@ -839,6 +923,34 @@ export default function App() {
   const [currentStage, setCurrentStage] = useState('')
   const [sessionId, setSessionId] = useState(null)
   const [currentView, setCurrentView] = useState('inspector') // 'inspector' | 'developer'
+
+  // Asynchronous Response Streaming State
+  const [streamState, setStreamState] = useState({
+    isStreaming: false,
+    verifiedCount: 0,
+    totalEngines: 6,
+    monotonicVerdict: 'INSPECTING...',
+    criticalEscalation: null,
+    subsystems: {
+      threat_intel: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      infrastructure: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      domain_age: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      redirect_chain: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      sandbox_preview: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      dynamic_sandbox: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+    },
+    lastAuditedSubsystem: null,
+  })
+
+  const streamAbortControllerRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (streamAbortControllerRef.current) {
+        streamAbortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   // Pure Monochrome Theme & System Adaptation: defaults to system or saved preference
   const [themePreference, setThemePreference] = useState(() => {
@@ -906,20 +1018,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Poll progress during active scan
-  useEffect(() => {
-    if (!sessionId || !loading) return
-    const iv = setInterval(async () => {
-      try {
-        const r = await fetch(`${apiBaseUrl}/api/check-progress/?sessionId=${sessionId}`)
-        const d = await r.json()
-        if (d.currentStage) setCurrentStage(d.currentStage)
-      } catch (_err) {
-        void _err
-      }
-    }, 350)
-    return () => clearInterval(iv)
-  }, [sessionId, loading, apiBaseUrl])
+  function handleReset() {
+    if (streamAbortControllerRef.current) {
+      streamAbortControllerRef.current.abort()
+    }
+    setResult(null)
+    setUrl('')
+    setError('')
+    setLoading(false)
+    setStreamState({
+      isStreaming: false,
+      verifiedCount: 0,
+      totalEngines: 6,
+      monotonicVerdict: 'INSPECTING...',
+      criticalEscalation: null,
+      subsystems: {
+        threat_intel: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        infrastructure: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        domain_age: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        redirect_chain: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        sandbox_preview: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        dynamic_sandbox: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      },
+      lastAuditedSubsystem: null,
+    })
+    inputRef.current?.focus()
+  }
 
   async function handleSubmit(e) {
     if (e) e.preventDefault()
@@ -934,35 +1058,236 @@ export default function App() {
       return
     }
 
+    if (streamAbortControllerRef.current) {
+      streamAbortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    streamAbortControllerRef.current = controller
+
     const sid = crypto.randomUUID()
     setSessionId(sid)
     setLoading(true)
-    setCurrentStage('Validating URL format...')
+    setCurrentStage('Opening streaming inspection channel...')
+
+    const freshStreamState = {
+      isStreaming: true,
+      verifiedCount: 0,
+      totalEngines: 6,
+      monotonicVerdict: 'INSPECTING...',
+      criticalEscalation: null,
+      subsystems: {
+        threat_intel: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        infrastructure: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        domain_age: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        redirect_chain: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        sandbox_preview: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        dynamic_sandbox: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      },
+      lastAuditedSubsystem: null,
+    }
+    setStreamState(freshStreamState)
+
+    function handleSseEvent(eventName, payload) {
+      if (!eventName || !payload) return
+
+      if (eventName === 'init') {
+        let hostname = ''
+        try {
+          hostname = new URL(payload.canonicalUrl).hostname
+        } catch {
+          hostname = trimmed
+        }
+        setResult({
+          url: payload.canonicalUrl,
+          rawInput: payload.rawInput,
+          defangedUrl: payload.defangedUrl,
+          verdict: 'INSPECTING...',
+          isShortener: payload.isShortener,
+          message: 'Concurrently auditing heuristics across 6 isolated engines...',
+          threats: [],
+          structureAnalysis: {
+            hostname,
+            findings: [],
+          },
+          telemetry: {},
+        })
+      } else if (eventName === 'critical_escalation') {
+        setStreamState(prev => ({
+          ...prev,
+          monotonicVerdict: 'UNSAFE',
+          criticalEscalation: payload,
+        }))
+        setResult(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            verdict: 'UNSAFE',
+            unsafe: true,
+            message: payload.explanation || 'Critical security threat identified. Verdict locked to UNSAFE.',
+          }
+        })
+      } else if (eventName === 'subsystem_result') {
+        const { subsystem, statusBadge, data, findings, completedCount, latencyMs } = payload
+        setStreamState(prev => ({
+          ...prev,
+          verifiedCount: completedCount || (prev.verifiedCount + 1),
+          lastAuditedSubsystem: subsystem,
+          subsystems: {
+            ...prev.subsystems,
+            [subsystem]: {
+              status: 'AUDITED',
+              badge: statusBadge,
+              data,
+              latencyMs,
+            },
+          },
+        }))
+
+        setResult(prev => {
+          if (!prev) return prev
+          const currentSa = prev.structureAnalysis || {}
+          const updatedFindings = [...(currentSa.findings || [])]
+          if (Array.isArray(findings)) {
+            findings.forEach(f => {
+              if (!updatedFindings.some(existing => existing.type === f.type)) {
+                updatedFindings.push(f)
+              }
+            })
+          }
+
+          const updatedSa = { ...currentSa, findings: updatedFindings }
+
+          if (subsystem === 'threat_intel' && data) {
+            prev.threatIntel = data
+            if (data.threatTypes && data.threatTypes.length > 0) {
+              prev.threats = data.threatTypes.map(tt => typeof tt === 'string' ? { threatType: tt, engine: 'Reputation Feed' } : tt)
+            }
+          } else if (subsystem === 'infrastructure' && data) {
+            updatedSa.infrastructureAnalysis = data
+          } else if (subsystem === 'domain_age' && data) {
+            updatedSa.domainAge = data
+          } else if (subsystem === 'redirect_chain' && data) {
+            updatedSa.redirectAnalysis = data
+          } else if (subsystem === 'sandbox_preview' && data) {
+            updatedSa.sandboxPreview = data
+          } else if (subsystem === 'dynamic_sandbox' && data) {
+            updatedSa.dynamicSandbox = data
+          }
+
+          return {
+            ...prev,
+            structureAnalysis: updatedSa,
+          }
+        })
+      } else if (eventName === 'final_verdict') {
+        setResult(prev => {
+          const merged = { ...prev, ...payload }
+          if (merged.unsafe || payload.verdict === 'UNSAFE') {
+            merged.verdict = 'UNSAFE'
+          }
+          return merged
+        })
+        setStreamState(prev => ({
+          ...prev,
+          monotonicVerdict: payload.verdict,
+        }))
+      } else if (eventName === 'complete') {
+        setLoading(false)
+        setStreamState(prev => ({ ...prev, isStreaming: false }))
+      } else if (eventName === 'error') {
+        setError(payload.error || 'Inspection stream encountered an error.')
+        setLoading(false)
+        setStreamState(prev => ({ ...prev, isStreaming: false }))
+      }
+    }
 
     try {
-      const res = await fetch(`${apiBaseUrl}/api/check-url/`, {
+      const res = await fetch(`${apiBaseUrl}/api/check-url/stream/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: trimmed, sessionId: sid }),
+        signal: controller.signal,
       })
-      const data = await res.json()
+
       if (!res.ok) {
-        setError(data.error || 'Could not complete safety audit. Please verify server connectivity.')
+        const errJson = await res.json().catch(() => ({}))
+        setError(errJson.error || 'Could not complete safety audit. Please verify server connectivity.')
+        setLoading(false)
+        setStreamState(prev => ({ ...prev, isStreaming: false }))
         return
       }
-      setResult(data)
-    } catch {
+
+      if (!res.body) {
+        throw new Error('ReadableStream not supported by response.')
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+
+        let currentEvent = null
+        for (const line of lines) {
+          const trimmedLine = line.trim()
+          if (!trimmedLine) {
+            currentEvent = null
+            continue
+          }
+          if (trimmedLine.startsWith('event:')) {
+            currentEvent = trimmedLine.replace('event:', '').trim()
+          } else if (trimmedLine.startsWith('data:')) {
+            const dataStr = trimmedLine.replace('data:', '').trim()
+            let payload = null
+            try {
+              payload = JSON.parse(dataStr)
+            } catch {
+              payload = dataStr
+            }
+            handleSseEvent(currentEvent, payload)
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return
+      }
       setError('Network communication failed. Please ensure the backend server is running.')
     } finally {
       setLoading(false)
-      setCurrentStage('')
+      setStreamState(prev => ({ ...prev, isStreaming: false }))
     }
   }
 
   function handleSelectPreset(presetUrl) {
+    if (streamAbortControllerRef.current) {
+      streamAbortControllerRef.current.abort()
+    }
     setUrl(presetUrl)
     setError('')
     setResult(null)
+    setStreamState({
+      isStreaming: false,
+      verifiedCount: 0,
+      totalEngines: 6,
+      monotonicVerdict: 'INSPECTING...',
+      criticalEscalation: null,
+      subsystems: {
+        threat_intel: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        infrastructure: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        domain_age: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        redirect_chain: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        sandbox_preview: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+        dynamic_sandbox: { status: 'PENDING', data: null, badge: null, latencyMs: null },
+      },
+      lastAuditedSubsystem: null,
+    })
     inputRef.current?.focus()
   }
 
@@ -1096,7 +1421,7 @@ export default function App() {
                 <button
                   type="button"
                   className="input-util-btn"
-                  onClick={() => { setUrl(''); setResult(null); setError(''); inputRef.current?.focus() }}
+                  onClick={handleReset}
                   title="Clear input"
                 >
                   <X size={14} weight="bold" />
@@ -1154,8 +1479,8 @@ export default function App() {
           </div>
         </form>
 
-        {/* Real-time Multi-Stage Progress Scanner */}
-        {loading && <ProgressBar currentStageLabel={currentStage} />}
+        {/* Real-time Multi-Stage Progress Scanner (shown while connecting before init event) */}
+        {loading && !result && <ProgressBar currentStageLabel={currentStage || 'Connecting to inspection stream...'} />}
 
         {/* Error Banner */}
         {error && (
@@ -1168,21 +1493,17 @@ export default function App() {
           </div>
         )}
 
-        {/* Inline Animated Interactive Pipeline Demo (Always available on canvas) */}
-        {!result && (
+        {/* Inline Animated Interactive Pipeline Demo (Always available on canvas when idle) */}
+        {!result && !loading && (
           <InteractivePipelineDemo onSelectScenarioUrl={handleSelectPreset} />
         )}
 
-        {/* Results View */}
-        {result && !loading && (
+        {/* Results View (renders live during streaming and after completion) */}
+        {result && (
           <ResultsView
             result={result}
-            onReset={() => {
-              setResult(null)
-              setUrl('')
-              setError('')
-              inputRef.current?.focus()
-            }}
+            streamState={streamState}
+            onReset={handleReset}
             onOpenSafePreview={() => setShowSafePreview(true)}
             onOpenExportReport={() => setShowExportModal(true)}
           />

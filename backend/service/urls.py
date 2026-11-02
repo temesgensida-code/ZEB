@@ -1,12 +1,13 @@
 from django.urls import path, re_path
 
-from .views import UrlSafetyCheckView, UrlCheckProgressView
+from .views import UrlSafetyCheckView, UrlCheckProgressView, UrlSafetyCheckStreamView
 from .api_views import DeveloperScanView
 from .key_views import KeyManagementView, KeyRevokeView, KeyUsageView
 from .auth_views import GoogleAuthView, CurrentUserView
 
 urlpatterns = [
     path('check-url/', UrlSafetyCheckView.as_view(), name='check-url'),
+    path('check-url/stream/', UrlSafetyCheckStreamView.as_view(), name='check-url-stream'),
     path('check-progress/', UrlCheckProgressView.as_view(), name='check-progress'),
     path('v1/auth/google/', GoogleAuthView.as_view(), name='auth-google'),
     path('v1/auth/me/', CurrentUserView.as_view(), name='auth-me'),
