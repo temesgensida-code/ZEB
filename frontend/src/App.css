@@ -2314,6 +2314,22 @@
     width: 100%;
     min-width: 0;
   }
+
+  .dev-copy-ghost-btn {
+    flex: 0 0 auto;
+    min-width: unset;
+    width: auto;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    opacity: 0.75;
+    padding: 4px 6px;
+  }
+
+  .dev-copy-ghost-btn:hover {
+    opacity: 1;
+    background: transparent;
+  }
 }
 
 /* ─── Developer Portal Specific Styles ─────────────────────────────────────── */
@@ -2484,6 +2500,50 @@
   font-size: 0.6875rem;
   font-weight: 700;
   color: var(--text-muted);
+}
+
+.dev-copy-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--text-primary);
+  opacity: 0.65;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-xs);
+  transition: opacity 0.15s ease, color 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+  min-width: unset;
+}
+
+.dev-copy-ghost-btn:hover {
+  opacity: 1;
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  box-shadow: none;
+}
+
+.dev-copy-ghost-btn:active {
+  opacity: 0.85;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.dev-copy-ghost-btn.copied {
+  opacity: 1;
+  color: var(--risk-safe-text);
+  border: none;
+  box-shadow: none;
 }
 
 .code-pre {

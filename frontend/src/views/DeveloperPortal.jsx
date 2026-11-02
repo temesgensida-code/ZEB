@@ -349,10 +349,21 @@ print(response.json())`
             <code className="target-url-code" style={{ color: 'var(--text-primary)' }}>{justCreatedSecret}</code>
             <button
               type="button"
-              className={`copy-mini-btn ${copiedKey === 'new-secret' ? 'copied' : ''}`}
+              className={`dev-copy-ghost-btn ${copiedKey === 'new-secret' ? 'copied' : ''}`}
               onClick={() => handleCopy(justCreatedSecret, 'new-secret')}
+              title={copiedKey === 'new-secret' ? 'Copied Key' : 'Copy Key'}
             >
-              {copiedKey === 'new-secret' ? <><Check size={12} weight="bold" /> Copied</> : <><Copy size={12} weight="bold" /> Copy Key</>}
+              {copiedKey === 'new-secret' ? (
+                <>
+                  <Check size={13} weight="bold" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={14} weight="bold" />
+                  <span>Copy Key</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -626,12 +637,19 @@ print(response.json())`
               <span>cURL</span>
               <button
                 type="button"
-                className={`copy-mini-btn copy-icon-only ${copiedKey === 'curl' ? 'copied' : ''}`}
+                className={`dev-copy-ghost-btn ${copiedKey === 'curl' ? 'copied' : ''}`}
                 onClick={() => handleCopy(curlSnippet, 'curl')}
                 aria-label="Copy cURL snippet"
                 title={copiedKey === 'curl' ? 'Copied' : 'Copy cURL'}
               >
-                {copiedKey === 'curl' ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
+                {copiedKey === 'curl' ? (
+                  <>
+                    <Check size={13} weight="bold" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <Copy size={14} weight="bold" />
+                )}
               </button>
             </div>
             <pre className="code-pre"><code>{curlSnippet}</code></pre>
@@ -642,12 +660,19 @@ print(response.json())`
               <span>Python (requests)</span>
               <button
                 type="button"
-                className={`copy-mini-btn copy-icon-only ${copiedKey === 'python' ? 'copied' : ''}`}
+                className={`dev-copy-ghost-btn ${copiedKey === 'python' ? 'copied' : ''}`}
                 onClick={() => handleCopy(pythonSnippet, 'python')}
                 aria-label="Copy Python snippet"
                 title={copiedKey === 'python' ? 'Copied' : 'Copy Python'}
               >
-                {copiedKey === 'python' ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
+                {copiedKey === 'python' ? (
+                  <>
+                    <Check size={13} weight="bold" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <Copy size={14} weight="bold" />
+                )}
               </button>
             </div>
             <pre className="code-pre"><code>{pythonSnippet}</code></pre>
