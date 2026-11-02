@@ -59,6 +59,7 @@ from service.url_checks.structure import (
 from service.url_checks.sandbox_preview import (
     audit_dom_forms,
     analyze_sandbox_preview,
+    extract_sanitized_text_and_dom,
 )
 
 
@@ -1131,6 +1132,107 @@ class StreamingEndpointTests(TestCase):
         self.assertIn(b'event: init', first_chunk)
         # Close the generator
         await chunk_iter.aclose()
+
+
+class SafePreviewTests(TestCase):
+    def test_dom_sanitization_and_text_extraction(self):
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Suspicious Portal</title>
+            <script>alert('xss');</script>
+            <style>body { background: red; }</style>
+        </head>
+        <body onload="doEvil()">
+            <h1>Security Notice: Account Suspended</h1>
+            <p onclick="stealCookies()">Immediate action required to verify account and avoid termination of your services.</p>
+            <a href="/login" onclick="return evil()">Click here to verify</a>
+            <img src="/logo.png" onerror="alert(1)">
+            <form action="/submit-creds" method="POST">
+                <input type="text" name="username">
+                <input type="password" name="password">
+                <input type="submit" value="Log In">
+            </form>
+            <iframe src="https://evil.com/frame"></iframe>
+        </body>
+        </html>
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        res = extract_sanitized_text_and_dom(soup, 'https://legit-portal.com/path/')
+        extracted = res['extractedText']
+        sanitized_html = res['sanitizedHtml']
+
+        # Assert dangerous elements stripped
+        self.assertNotIn('<script', sanitized_html.lower())
+        self.assertNotIn('<iframe', sanitized_html.lower())
+        self.assertNotIn('onload=', sanitized_html.lower())
+        self.assertNotIn('onclick=', sanitized_html.lower())
+        self.assertNotIn('onerror=', sanitized_html.lower())
+
+        # Assert absolute URL resolution
+        self.assertIn('https://legit-portal.com/login', sanitized_html)
+        self.assertIn('https://legit-portal.com/logo.png', sanitized_html)
+
+        # Assert semantic text hierarchy
+        self.assertEqual(extracted['title'], 'Suspicious Portal')
+        self.assertEqual(len(extracted['headings']), 1)
+        self.assertEqual(extracted['headings'][0]['level'], 'H1')
+        self.assertIn('Account Suspended', extracted['headings'][0]['text'])
+
+        # Assert paragraphs
+        self.assertTrue(len(extracted['paragraphs']) >= 1)
+        self.assertIn('Immediate action required', extracted['paragraphs'][0])
+
+        # Assert form data
+        self.assertEqual(len(extracted['forms']), 1)
+        self.assertEqual(extracted['forms'][0]['action'], 'https://legit-portal.com/submit-creds')
+        self.assertEqual(extracted['forms'][0]['method'], 'POST')
+        types = [inp['type'] for inp in extracted['forms'][0]['inputs']]
+        self.assertIn('password', types)
+
+        # Assert lure hits detected
+        self.assertIn('account suspended', extracted['lureHits'])
+        self.assertIn('immediate action required', extracted['lureHits'])
+        self.assertIn('verify account', extracted['lureHits'])
+        self.assertTrue(extracted['wordCount'] > 0)
+        self.assertTrue(extracted['readingTimeSec'] >= 5)
+
+
+class SafePreviewScreenshotViewTests(TestCase):
+    async def test_screenshot_empty_url_returns_400(self):
+        client = AsyncClient()
+        response = await client.post(
+            '/api/safe-preview/screenshot/',
+            {'url': ''},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    async def test_screenshot_invalid_url_returns_400(self):
+        client = AsyncClient()
+        response = await client.post(
+            '/api/safe-preview/screenshot/',
+            {'url': ':::invalid'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    async def test_screenshot_success_or_fallback(self):
+        client = AsyncClient()
+        response = await client.post(
+            '/api/safe-preview/screenshot/',
+            {'url': 'https://example.com'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('available', data)
+        if data['available']:
+            self.assertTrue(data['screenshotDataUri'].startswith('data:image/png;base64,'))
+        else:
+            self.assertEqual(data.get('fallback'), 'sanitized_dom')
+
 
 
 

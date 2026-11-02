@@ -397,6 +397,156 @@ def audit_dom_forms(soup: BeautifulSoup, page_url: str, findings: list) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Semantic Text Extraction & DOM Sanitization
+# ---------------------------------------------------------------------------
+
+LURE_PHRASES: list[str] = [
+    'account suspended',
+    'immediate action required',
+    'urgent action',
+    'unauthorized access',
+    'verify identity',
+    'verify account',
+    'update payment',
+    'confirm password',
+    'wallet verification',
+    'connect wallet',
+    'claim airdrop',
+    'security notice',
+    'banking alert',
+    'password reset',
+    'billing problem',
+    'suspicious activity',
+]
+
+
+def extract_sanitized_text_and_dom(soup: BeautifulSoup, base_url: str) -> dict:
+    """
+    Extracts semantic structured text and produces a neutralized, zero-JS HTML document.
+    Ensures zero script execution while preserving reading hierarchy and visual layout.
+    """
+    try:
+        clean_soup = BeautifulSoup(str(soup), 'html.parser')
+    except Exception:
+        clean_soup = BeautifulSoup('', 'html.parser')
+
+    # 1. Strip dangerous and active elements
+    for tag in clean_soup(['script', 'iframe', 'object', 'embed', 'noscript', 'canvas', 'svg', 'applet', 'meta']):
+        tag.decompose()
+
+    # Handle style and link tags: strip styles or rewrite stylesheets
+    for tag in clean_soup(['style', 'link']):
+        if tag.name == 'link':
+            rel = [r.lower() for r in (tag.get('rel') or [])] if isinstance(tag.get('rel'), list) else [str(tag.get('rel') or '').lower()]
+            if 'stylesheet' in rel and tag.get('href'):
+                tag['href'] = urljoin(base_url, tag['href'])
+                continue
+        tag.decompose()
+
+    # 2. Strip inline event handlers and dangerous protocol attributes
+    for el in clean_soup.find_all(True):
+        attrs = dict(el.attrs)
+        for attr, val in attrs.items():
+            attr_lower = attr.lower()
+            if attr_lower.startswith('on'):
+                del el[attr]
+            elif isinstance(val, str) and val.strip().lower().startswith(('javascript:', 'vbscript:', 'data:text/html')):
+                del el[attr]
+
+        # Resolve relative URLs and neutralize interactions
+        if el.name == 'a':
+            if el.get('href'):
+                el['href'] = urljoin(base_url, el['href'])
+            else:
+                el['href'] = '#'
+            el['target'] = '_blank'
+            el['rel'] = 'noopener noreferrer nofollow'
+        elif el.name == 'img' and el.get('src'):
+            el['src'] = urljoin(base_url, el['src'])
+            el['loading'] = 'lazy'
+        elif el.name == 'form':
+            el['action'] = '#'
+            el['method'] = 'GET'
+            el['onsubmit'] = 'return false;'
+
+    # 3. Extract semantic structured hierarchy
+    title = clean_soup.title.string.strip() if clean_soup.title and clean_soup.title.string else ''
+
+    headings: list[dict[str, str]] = []
+    for h in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        txt = h.get_text(' ', strip=True)
+        if txt:
+            headings.append({'level': h.name.upper(), 'text': txt})
+
+    paragraphs: list[str] = []
+    for p in clean_soup.find_all(['p', 'article', 'section', 'li']):
+        txt = p.get_text(' ', strip=True)
+        if txt and len(txt) > 20 and txt not in paragraphs:
+            paragraphs.append(txt)
+
+    # 4. Extract form information (from original soup to capture real actions and fields)
+    forms: list[dict] = []
+    for f in soup.find_all('form'):
+        raw_act = (f.get('action') or '').strip()
+        act_url = urljoin(base_url, raw_act) if raw_act else base_url
+        method = (f.get('method') or 'GET').upper()
+        inputs: list[dict[str, str]] = []
+        for inp in f.find_all(['input', 'textarea', 'select']):
+            itype = (inp.get('type') or 'text').lower()
+            iname = inp.get('name') or inp.get('id') or ''
+            inputs.append({'type': itype, 'name': iname})
+        forms.append({
+            'action': act_url,
+            'method': method,
+            'inputs': inputs,
+        })
+
+    # 5. Calculate words, reading time, and lure hits
+    combined_texts = [title] + [h['text'] for h in headings] + paragraphs
+    plain_text = '\n\n'.join(t for t in combined_texts if t)
+    words = plain_text.split()
+    word_count = len(words)
+    reading_time_sec = max(5, int(word_count / 3.5)) if word_count > 0 else 0
+
+    lower_plain = plain_text.lower()
+    detected_lures = [lp for lp in LURE_PHRASES if lp in lower_plain]
+
+    # Prepend basic security CSS to sanitizedHtml to ensure safe layout rendering
+    body_content = clean_soup.body.decode_contents() if clean_soup.body else str(clean_soup)
+    safe_wrapper = (
+        '<!DOCTYPE html>\n'
+        '<html>\n'
+        '<head>\n'
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '<style>\n'
+        'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; color: #1a1a1a; padding: 1rem; max-width: 100%; word-break: break-word; }\n'
+        'img { max-width: 100%; height: auto; }\n'
+        'a { color: #0066cc; text-decoration: underline; pointer-events: none; }\n'
+        'form { border: 1px dashed #ccc; padding: 10px; margin: 10px 0; background: #fafafa; }\n'
+        'input, button, select, textarea { pointer-events: none; opacity: 0.8; }\n'
+        '</style>\n'
+        '</head>\n'
+        f'<body>{body_content}</body>\n'
+        '</html>'
+    )
+
+    return {
+        'extractedText': {
+            'title': title,
+            'headings': headings,
+            'paragraphs': paragraphs[:50],
+            'forms': forms,
+            'lureHits': detected_lures,
+            'plainText': plain_text[:50000],
+            'wordCount': word_count,
+            'readingTimeSec': reading_time_sec,
+        },
+        'sanitizedHtml': safe_wrapper,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -559,6 +709,17 @@ async def _analyze_sandbox_preview_with_session(
                     'redirectIssues': redirect_issues,
                     'urlEntropyScore': url_entropy,
                     'riskScore': risk_score,
+                    'extractedText': {
+                        'title': '',
+                        'headings': [],
+                        'paragraphs': [],
+                        'forms': [],
+                        'lureHits': [],
+                        'plainText': '',
+                        'wordCount': 0,
+                        'readingTimeSec': 0,
+                    },
+                    'sanitizedHtml': '',
                     'linkXRay': {
                         'forms': [],
                         'externalAssetCount': 0,
@@ -621,6 +782,17 @@ async def _analyze_sandbox_preview_with_session(
             'redirectIssues': [],
             'urlEntropyScore': url_entropy,
             'riskScore': risk_score,
+            'extractedText': {
+                'title': '',
+                'headings': [],
+                'paragraphs': [],
+                'forms': [],
+                'lureHits': [],
+                'plainText': '',
+                'wordCount': 0,
+                'readingTimeSec': 0,
+            },
+            'sanitizedHtml': '',
             'linkXRay': {
                 'forms': [],
                 'externalAssetCount': 0,
@@ -848,9 +1020,10 @@ async def _analyze_sandbox_preview_with_session(
     )
 
     # ------------------------------------------------------------------
-    # 15. Aggregate risk score
+    # 15. Aggregate risk score & DOM Sanitization / Text Extraction
     # ------------------------------------------------------------------
     risk_score = _compute_risk_score(findings)
+    sanitized_content = extract_sanitized_text_and_dom(soup, resp_url)
 
     if telemetry is not None:
         telemetry['cpu_dom_analysis_ms'] = (time.perf_counter() - t_dom_start) * 1000
@@ -871,6 +1044,8 @@ async def _analyze_sandbox_preview_with_session(
         'redirectIssues': redirect_issues,
         'urlEntropyScore': url_entropy,
         'riskScore': risk_score,
+        'extractedText': sanitized_content['extractedText'],
+        'sanitizedHtml': sanitized_content['sanitizedHtml'],
         'linkXRay': {
             'forms': dom_audit['forms'],
             'externalAssetCount': dom_audit['externalAssetCount'],

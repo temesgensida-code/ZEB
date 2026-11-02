@@ -607,7 +607,23 @@ class UrlSafetyCheckStreamView(AsyncAPIView):
 							await queue.put(('sandbox_preview', res, findings, badge, (time.perf_counter() - t0) * 1000))
 						except Exception as exc:
 							logger.exception("Stream sandbox preview worker error: %s", exc)
-							await queue.put(('sandbox_preview', {'available': False, 'htmlAnalyzed': False, 'riskScore': 0, 'evaluationDegraded': True}, [], 'DEGRADED', 0.0))
+							await queue.put(('sandbox_preview', {
+								'available': False,
+								'htmlAnalyzed': False,
+								'riskScore': 0,
+								'evaluationDegraded': True,
+								'extractedText': {
+									'title': '',
+									'headings': [],
+									'paragraphs': [],
+									'forms': [],
+									'lureHits': [],
+									'plainText': '',
+									'wordCount': 0,
+									'readingTimeSec': 0,
+								},
+								'sanitizedHtml': '',
+							}, [], 'DEGRADED', 0.0))
 
 					async def run_dynamic_sandbox():
 						t0 = time.perf_counter()
@@ -773,4 +789,63 @@ class UrlSafetyCheckStreamView(AsyncAPIView):
 		response['X-Accel-Buffering'] = 'no'
 		response['X-Session-ID'] = session_id
 		return response
+
+
+class SafePreviewScreenshotView(AsyncAPIView):
+	"""
+	POST /api/safe-preview/screenshot/
+	Captures or retrieves an isolated headless browser screenshot on demand.
+	Returns base64 PNG data URI or graceful fallback indicator.
+	"""
+	authentication_classes = []
+	permission_classes = [AllowAny]
+
+	async def post(self, request):
+		t0 = time.perf_counter()
+		raw_url = (request.data.get('url') or '').strip()
+		if not raw_url:
+			return Response(
+				{'error': 'A valid URL is required for screenshot capture.'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+
+		target_url = normalize_url(refang_url(raw_url))
+		parsed = urlparse(target_url)
+		if not parsed.scheme or not parsed.netloc or not parsed.hostname:
+			return Response(
+				{'error': 'Please provide a valid URL (e.g. https://example.com).'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+
+		try:
+			worker_result = await asyncio.to_thread(
+				dynamic_sandbox_manager.worker.run_sandbox_session,
+				target_url,
+			)
+			elapsed_ms = int((time.perf_counter() - t0) * 1000)
+			screenshot_uri = worker_result.get('screenshotDataUri')
+
+			if screenshot_uri:
+				return Response({
+					'available': True,
+					'screenshotDataUri': screenshot_uri,
+					'executionTimeMs': elapsed_ms,
+				}, status=status.HTTP_200_OK)
+			else:
+				return Response({
+					'available': False,
+					'error': worker_result.get('error') or 'Headless browser screenshot unavailable in this environment',
+					'fallback': 'sanitized_dom',
+					'executionTimeMs': elapsed_ms,
+				}, status=status.HTTP_200_OK)
+		except Exception as exc:
+			logger.exception("Error executing on-demand screenshot: %s", exc)
+			elapsed_ms = int((time.perf_counter() - t0) * 1000)
+			return Response({
+				'available': False,
+				'error': str(exc),
+				'fallback': 'sanitized_dom',
+				'executionTimeMs': elapsed_ms,
+			}, status=status.HTTP_200_OK)
+
 

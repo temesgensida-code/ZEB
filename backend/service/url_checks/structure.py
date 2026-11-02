@@ -297,6 +297,17 @@ async def _analyze_url_structure_with_session(
             'redirectIssues': [],
             'urlEntropyScore': 0.0,
             'riskScore': 0,
+            'extractedText': {
+                'title': '',
+                'headings': [],
+                'paragraphs': [],
+                'forms': [],
+                'lureHits': [],
+                'plainText': '',
+                'wordCount': 0,
+                'readingTimeSec': 0,
+            },
+            'sanitizedHtml': '',
             'linkXRay': {
                 'forms': [],
                 'externalAssetCount': 0,
