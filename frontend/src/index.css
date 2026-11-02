@@ -20,9 +20,9 @@
   --radius-sm:  3px;
   --radius-md:  4px;
 
-  /* Mechanical Shadow Offsets */
-  --mech-shadow-light: 2px 2px 0px #000000;
-  --mech-shadow-dark:  2px 2px 0px #FFFFFF;
+  /* Mechanical Shadow Offsets (Halved Boldness / 50% Opacity) */
+  --mech-shadow-light: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  --mech-shadow-dark:  2px 2px 0px rgba(255, 255, 255, 0.5);
 
   /* Typography */
   --font-brand: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
