@@ -365,7 +365,7 @@
   letter-spacing: -0.04em;
   line-height: 1.1;
   color: var(--text-primary);
-  margin-bottom: 22px;
+  margin-bottom: 36px;
 }
 
 .hero-author-meta {
@@ -2164,6 +2164,7 @@
   .hero-headline {
     font-size: 1.65rem;
     line-height: 1.15;
+    margin-bottom: 28px;
   }
 
   .hero-lead-text {
