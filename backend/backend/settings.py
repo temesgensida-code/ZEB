@@ -68,7 +68,7 @@ ALLOWED_HOSTS = env_list(
 )
 CSRF_TRUSTED_ORIGINS = env_list(
     'DJANGO_CSRF_TRUSTED_ORIGINS',
-    ['https://*.onrender.com', 'https://*.vercel.app'],
+    ['https://*.onrender.com', 'https://*.vercel.app', 'https://*.netlify.app'],
 )
 CORS_ALLOWED_ORIGINS = env_list(
     'DJANGO_CORS_ALLOWED_ORIGINS',
@@ -81,10 +81,14 @@ CORS_ALLOWED_ORIGINS = env_list(
 )
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https:\/\/.*\.vercel\.app$',
+    r'^https:\/\/.*\.netlify\.app$',
 ]
 CORS_ALLOW_CREDENTIALS = env_bool('DJANGO_CORS_ALLOW_CREDENTIALS', True)
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'x-api-key',
+    'x-session-id',
+]
+CORS_EXPOSE_HEADERS = [
     'x-session-id',
 ]
 
@@ -133,6 +137,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
+ASGI_APPLICATION = 'backend.asgi.application'
 
 
 # Database
