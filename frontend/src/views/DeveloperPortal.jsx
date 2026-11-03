@@ -25,7 +25,7 @@ export function DeveloperPortal({ onBackToInspector }) {
 
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('zeb-auth-token') || null)
   const [user, setUser] = useState(null)
-  const [loadingAuth, setLoadingAuth] = useState(true)
+  const [loadingAuth, setLoadingAuth] = useState(() => Boolean(localStorage.getItem('zeb-auth-token')))
   const [keys, setKeys] = useState([])
   const [newKeyName, setNewKeyName] = useState('')
   const [justCreatedSecret, setJustCreatedSecret] = useState(null)
@@ -178,6 +178,7 @@ export function DeveloperPortal({ onBackToInspector }) {
     setUsageStats(null)
     setJustCreatedSecret(null)
     setError('')
+    setLoadingAuth(false)
   }
 
   // Create API Key (Enforces 1 key limit)
@@ -294,7 +295,13 @@ print(response.json())`
             <span>DEVELOPER API PLATFORM</span>
           </span>
 
-          {user && (
+          {loadingAuth && authToken ? (
+            <div className="dev-user-chip dev-user-chip-skeleton" aria-busy="true" aria-label="Loading developer profile...">
+              <div className="skeleton-box skeleton-avatar-circle" />
+              <div className="skeleton-box skeleton-name-line" />
+              <div className="skeleton-box skeleton-btn-pill" />
+            </div>
+          ) : user ? (
             <div className="dev-user-chip">
               {user.picture ? (
                 <img src={user.picture} alt={user.name || 'User'} className="dev-user-avatar" />
@@ -312,7 +319,7 @@ print(response.json())`
                 <span>Sign Out</span>
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -376,6 +383,50 @@ print(response.json())`
             <span>Error</span>
           </div>
           <p className="threat-explanation">{error}</p>
+        </div>
+      )}
+
+      {/* Loading Dashboard Skeleton (Returning developer with saved token) */}
+      {loadingAuth && authToken && (
+        <div className="dev-dashboard-skeleton-wrapper" aria-busy="true" aria-label="Loading developer dashboard...">
+          {/* Quota & Usage Overview Skeleton */}
+          <div className="dev-metrics-grid">
+            <div className="metric-tile metric-tile-skeleton">
+              <div className="skeleton-box" style={{ width: '70px', height: '11px', marginBottom: '8px' }} />
+              <div className="skeleton-box" style={{ width: '130px', height: '26px', marginBottom: '10px' }} />
+              <div className="skeleton-box" style={{ width: '100%', height: '5px', marginBottom: '8px' }} />
+              <div className="skeleton-box" style={{ width: '150px', height: '10px' }} />
+            </div>
+
+            <div className="metric-tile metric-tile-skeleton">
+              <div className="skeleton-box" style={{ width: '90px', height: '11px', marginBottom: '8px' }} />
+              <div className="skeleton-box" style={{ width: '100px', height: '26px', marginBottom: '10px' }} />
+              <div className="skeleton-box" style={{ width: '110px', height: '10px' }} />
+            </div>
+
+            <div className="metric-tile metric-tile-skeleton">
+              <div className="skeleton-box" style={{ width: '85px', height: '11px', marginBottom: '8px' }} />
+              <div className="skeleton-box" style={{ width: '90px', height: '26px', marginBottom: '10px' }} />
+              <div className="skeleton-box" style={{ width: '125px', height: '10px' }} />
+            </div>
+
+            <div className="metric-tile metric-tile-skeleton">
+              <div className="skeleton-box" style={{ width: '130px', height: '11px', marginBottom: '8px' }} />
+              <div className="skeleton-box" style={{ width: '160px', height: '20px', marginBottom: '10px' }} />
+              <div className="skeleton-box" style={{ width: '135px', height: '10px' }} />
+            </div>
+          </div>
+
+          {/* Key Management Card Skeleton */}
+          <div className="dev-section-block dev-section-skeleton">
+            <div className="dev-section-header" style={{ marginBottom: '16px' }}>
+              <div className="dev-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="skeleton-box" style={{ width: '16px', height: '16px' }} />
+                <div className="skeleton-box" style={{ width: '120px', height: '18px' }} />
+              </div>
+            </div>
+            <div className="skeleton-box skeleton-console-box" style={{ width: '100%', height: '80px', borderRadius: 'var(--radius-xs)' }} />
+          </div>
         </div>
       )}
 
