@@ -41,6 +41,8 @@ import { SafePreviewModal } from './components/SafePreviewModal'
 import { ReportExportModal } from './components/ReportExportModal'
 import { DeveloperPortal } from './views/DeveloperPortal'
 import { defangUrl } from './utils/stixGenerator'
+import PlainEnglishAdvisoryCard from './components/PlainEnglishAdvisoryCard'
+import SecurityExplainerDrawer from './components/SecurityExplainerDrawer'
 
 // ─── Stage Metadata for Multi-Stage Progress Scanner ─────────────────────────
 const STAGES = [
@@ -304,7 +306,7 @@ function InfoModal({ onClose }) {
 }
 
 // ─── Results Presentation Component ──────────────────────────────────────────
-function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenExportReport }) {
+function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenExportReport, onOpenExplainer }) {
   const [copiedKey, setCopiedKey] = useState(null)
   const { url, verdict, message, threats, structureAnalysis } = result
   const sa = structureAnalysis || {}
@@ -489,18 +491,33 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
         <p className="verdict-explanation-msg">{message}</p>
       </div>
 
+      {/* Plain-English Advisory Card (Human Traffic Light & Action Steps) */}
+      <PlainEnglishAdvisoryCard
+        result={result}
+        onOpenExplainer={onOpenExplainer}
+      />
+
       {/* Visual Brand Impersonation Alert */}
       {visual.detected && (
         <div className="threat-module">
           <div className="threat-module-title">
             <Warning size={16} weight="bold" />
             <span>Visual Brand Impersonation Detected</span>
+            <button
+              type="button"
+              className="explain-mini-pill"
+              onClick={() => onOpenExplainer('typosquatting')}
+              title="Explain how brand impersonation attacks work"
+            >
+              (?) Explain This
+            </button>
           </div>
           <div className="threat-record">
             <div className="threat-record-header">
               <span className="threat-badge">VISUAL CLONE</span>
               <span className="threat-platform">Targeted Brand: {visual.brand}</span>
             </div>
+
             <p className="threat-explanation">
               Page layout displays {Math.round((visual.similarityScore || 0) * 100)}% visual similarity to official {visual.brand} login portals, indicating an active phishing credential harvester.
             </p>
@@ -514,6 +531,14 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
           <div className="threat-module-title">
             <ShieldSlash size={16} weight="bold" />
             <span>Web3 Crypto Drainer Signatures Detected</span>
+            <button
+              type="button"
+              className="explain-mini-pill"
+              onClick={() => onOpenExplainer('web3_drainer')}
+              title="Explain crypto wallet drainers"
+            >
+              (?) Explain This
+            </button>
           </div>
           <div className="threat-record">
             <div className="threat-record-header">
@@ -533,6 +558,14 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
           <div className="threat-module-title">
             <Warning size={16} weight="bold" />
             <span>Drive-by Download / Malicious Payload Trap</span>
+            <button
+              type="button"
+              className="explain-mini-pill"
+              onClick={() => onOpenExplainer('drive_by_download')}
+              title="Explain drive-by downloads and payload masquerading"
+            >
+              (?) Explain This
+            </button>
           </div>
           <div className="threat-record">
             <div className="threat-record-header">
@@ -552,6 +585,14 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
           <div className="threat-module-title">
             <Database size={16} weight="bold" />
             <span>Bulletproof Hosting Infrastructure Identified</span>
+            <button
+              type="button"
+              className="explain-mini-pill"
+              onClick={() => onOpenExplainer('bulletproof_asn')}
+              title="Explain bulletproof hosting networks"
+            >
+              (?) Explain This
+            </button>
           </div>
           <div className="threat-record">
             <div className="threat-record-header">
@@ -571,6 +612,14 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
           <div className="threat-module-title">
             <Warning size={16} weight="bold" />
             <span>Multi-Engine Threat Intelligence Matches</span>
+            <button
+              type="button"
+              className="explain-mini-pill"
+              onClick={() => onOpenExplainer('google_safe_browsing')}
+              title="Explain threat intelligence blacklists"
+            >
+              (?) Explain This
+            </button>
           </div>
           {threats.map((t, idx) => (
             <div key={idx} className="threat-record">
@@ -595,7 +644,16 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
           <div className="pipeline-header">
             <ShareNetwork size={16} weight="bold" />
             <span>Obfuscated Shortener Chain Detected</span>
+            <button
+              type="button"
+              className="explain-mini-pill"
+              onClick={() => onOpenExplainer('redirect_chain')}
+              title="Explain URL shorteners and redirect cloaking"
+            >
+              (?) Explain This
+            </button>
           </div>
+
           <p className="pipeline-desc">
             This URL passes through a shortening gateway to mask its final destination. ZEB traversed the redirect hops to expose the terminal endpoint.
           </p>
@@ -662,27 +720,58 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               <span className="metric-tile-value" title={sa.hostname}>{sa.hostname || '—'}</span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">Registered Domain</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">Registered Domain</span>
+                {sa.hasTyposquattingSignal && (
+                  <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('typosquatting')} title="Explain brand lookalike / typosquatting">
+                    (?) Explain
+                  </button>
+                )}
+              </div>
               <span className="metric-tile-value" title={sa.registeredDomainFull}>{sa.registeredDomainFull || '—'}</span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">TLD Zone</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">TLD Zone</span>
+                {sa.hasSuspiciousTld && (
+                  <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('suspicious_tld')} title="Explain suspicious domain endings">
+                    (?) Explain
+                  </button>
+                )}
+              </div>
               <span className="metric-tile-value">.{sa.tld || '—'}</span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">Domain Age</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">Domain Age</span>
+                <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('domain_age')} title="Explain domain age risks">
+                  (?) Explain
+                </button>
+              </div>
               <span className="metric-tile-value">
                 {sa.domainAge?.available ? `${sa.domainAge.domainAgeDays} days` : 'Lookup Unavailable'}
               </span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">Velocity Risk</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">Velocity Risk</span>
+                <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('domain_age')} title="Explain velocity & throwaway domain risks">
+                  (?) Explain
+                </button>
+              </div>
               <span className={`metric-tile-value ${sa.domainAge?.isNewDomain ? 'val-danger' : 'val-safe'}`}>
                 {sa.domainAge?.isNewDomain ? 'High (Recent Reg)' : 'Verified Historical'}
               </span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">Host Routing</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">Host Routing</span>
+                {sa.isIpBased && (
+                  <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('ip_host')} title="Explain raw IP host routing risks">
+                    (?) Explain
+                  </button>
+                )}
+              </div>
               <span className={`metric-tile-value ${sa.isIpBased ? 'val-warn' : 'val-safe'}`}>
                 {sa.isIpBased ? 'Direct IP Host' : 'Named DNS Domain'}
               </span>
@@ -696,6 +785,27 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
                   {f.flagged ? <WarningCircle size={14} weight="bold" /> : <CheckCircle size={14} weight="bold" />}
                 </span>
                 <span className="finding-desc">{f.explanation}</span>
+                {f.flagged && (
+                  <button
+                    type="button"
+                    className="explain-mini-pill"
+                    onClick={() => {
+                      const topicId = f.type?.toLowerCase().includes('ip')
+                        ? 'ip_host'
+                        : f.type?.toLowerCase().includes('age') || f.type?.toLowerCase().includes('domain')
+                        ? 'domain_age'
+                        : f.type?.toLowerCase().includes('typo')
+                        ? 'typosquatting'
+                        : f.type?.toLowerCase().includes('tld')
+                        ? 'suspicious_tld'
+                        : 'domain_age'
+                      onOpenExplainer(topicId)
+                    }}
+                    title="Explain this finding in plain English"
+                  >
+                    (?) Explain
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -728,19 +838,34 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               </span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">Bulletproof Status</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">Bulletproof Status</span>
+                <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('bulletproof_asn')} title="Explain bulletproof hosting networks">
+                  (?) Explain
+                </button>
+              </div>
               <span className={`metric-tile-value ${infra.asnInfo?.isHighAbuse ? 'val-danger' : 'val-safe'}`}>
                 {infra.asnInfo?.isHighAbuse ? 'High Abuse Host' : 'Standard Host'}
               </span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">Fast-Flux DNS</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">Fast-Flux DNS</span>
+                <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('fast_flux')} title="Explain fast-flux DNS evasion">
+                  (?) Explain
+                </button>
+              </div>
               <span className={`metric-tile-value ${infra.dnsAudit?.fastFluxDetected ? 'val-danger' : 'val-safe'}`}>
                 {infra.dnsAudit?.fastFluxDetected ? 'Detected' : 'Normal'}
               </span>
             </div>
             <div className="metric-tile">
-              <span className="metric-tile-label">SSL Cert Recency</span>
+              <div className="metric-tile-top-row">
+                <span className="metric-tile-label">SSL Cert Recency</span>
+                <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('ssl_recency')} title="Explain SSL certificate age and dangers">
+                  (?) Explain
+                </button>
+              </div>
               <span className={`metric-tile-value ${infra.sslAudit?.isVeryRecent ? 'val-danger' : 'val-safe'}`}>
                 {infra.sslAudit?.ageDays !== undefined ? `${infra.sslAudit.ageDays} days old` : 'Unknown'}
               </span>
@@ -772,7 +897,11 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               {sandbox.matchedKeywords?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <FileText size={14} weight="bold" /> Phishing Keywords Found
+                    <FileText size={14} weight="bold" />
+                    <span>Phishing Keywords Found</span>
+                    <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('phishing_keywords')} title="Explain phishing urgency tricks">
+                      (?) Explain
+                    </button>
                   </div>
                   <p className="sandbox-group-subtitle">Urgency pressure keywords frequently associated with unauthorized password resets or billing fraud.</p>
                   <div className="chips-cloud">
@@ -786,7 +915,11 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               {sandbox.fakeLoginForms?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <FileCode size={14} weight="bold" /> Suspicious Form Actions
+                    <FileCode size={14} weight="bold" />
+                    <span>Suspicious Form Actions</span>
+                    <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('fake_login_form')} title="Explain unauthorized credential harvesters">
+                      (?) Explain
+                    </button>
                   </div>
                   <p className="sandbox-group-subtitle">Credential-accepting form fields submitting payloads to foreign or unusual endpoints.</p>
                   {sandbox.fakeLoginForms.map((f, i) => (
@@ -801,7 +934,11 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               {credHarvester.hiddenOverlays?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <Eye size={14} weight="bold" /> Clickjacking Hidden Overlays
+                    <Eye size={14} weight="bold" />
+                    <span>Clickjacking Hidden Overlays</span>
+                    <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('clickjacking_overlay')} title="Explain clickjacking invisible overlays">
+                      (?) Explain
+                    </button>
                   </div>
                   <p className="sandbox-group-subtitle">Transparent overlay elements with opacity: 0 and z-index: 9999 hijacking pointer events.</p>
                   {credHarvester.hiddenOverlays.map((o, i) => (
@@ -815,12 +952,19 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               {sandbox.sslIssues?.length > 0 && (
                 <div className="sandbox-group-block">
                   <div className="sandbox-group-title">
-                    <LockOpen size={14} weight="bold" /> SSL / TLS Certificate Issues
+                    <LockOpen size={14} weight="bold" />
+                    <span>SSL / TLS Certificate Issues</span>
+                    <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('ssl_issues')} title="Explain broken or expired SSL certificates">
+                      (?) Explain
+                    </button>
                   </div>
                   {sandbox.sslIssues.map((s, i) => (
                     <div key={i} className="finding-row flagged">
                       <span className="finding-dot"><WarningCircle size={14} weight="bold" /></span>
                       <span className="finding-desc">{s.issue}</span>
+                      <button type="button" className="explain-mini-pill" onClick={() => onOpenExplainer('ssl_issues')} title="Explain this SSL issue">
+                        (?) Explain
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -835,6 +979,7 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
             </div>
           )}
         </CollapsibleSection>
+
 
         {/* Section 4: Redirect Chain & Protocol Integrity */}
         <CollapsibleSection
@@ -851,6 +996,14 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               <span className="finding-desc">
                 Excessive redirect count ({redirect.hopCount} hops). Often employed by cloaking networks to evade automated inspection.
               </span>
+              <button
+                type="button"
+                className="explain-mini-pill"
+                onClick={() => onOpenExplainer('redirect_chain')}
+                title="Explain why excessive redirects are dangerous"
+              >
+                (?) Explain
+              </button>
             </div>
           )}
 
@@ -864,8 +1017,28 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
                   </div>
                   <div className="chips-cloud">
                     {hop.crossOrigin && <span className="meta-chip chip-warn">Cross-Origin</span>}
-                    {hop.isShortener && <span className="meta-chip">Shortener</span>}
-                    {hop.schemeDowngrade && <span className="meta-chip chip-bad">HTTPS → HTTP Downgrade</span>}
+                    {hop.isShortener && (
+                      <button
+                        type="button"
+                        className="meta-chip"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => onOpenExplainer('redirect_chain')}
+                        title="Click to explain shortener cloaking"
+                      >
+                        Shortener (?)
+                      </button>
+                    )}
+                    {hop.schemeDowngrade && (
+                      <button
+                        type="button"
+                        className="meta-chip chip-bad"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => onOpenExplainer('scheme_downgrade')}
+                        title="Click to explain HTTPS downgrade danger"
+                      >
+                        HTTPS → HTTP Downgrade (?)
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -875,6 +1048,7 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               Direct destination reached with zero intermediate redirects.
             </p>
           )}
+
         </CollapsibleSection>
       </div>
 
@@ -920,6 +1094,7 @@ export default function App() {
   const [showInfo, setShowInfo] = useState(false)
   const [showSafePreview, setShowSafePreview] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [explainerTopic, setExplainerTopic] = useState(null)
   const [currentStage, setCurrentStage] = useState('')
   const [sessionId, setSessionId] = useState(null)
   const [currentView, setCurrentView] = useState('inspector') // 'inspector' | 'developer'
@@ -1310,6 +1485,13 @@ export default function App() {
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
       {showSafePreview && <SafePreviewModal result={result} onClose={() => setShowSafePreview(false)} />}
       {showExportModal && <ReportExportModal result={result} onClose={() => setShowExportModal(false)} />}
+      <SecurityExplainerDrawer
+        isOpen={Boolean(explainerTopic)}
+        onClose={() => setExplainerTopic(null)}
+        activeTopicId={explainerTopic}
+        onSelectTopic={setExplainerTopic}
+        result={result}
+      />
 
       {/* Full-Width Fixed Frosted Navigation Header */}
       <header className={`fixed-nav-header ${isScrolled ? 'is-scrolled' : ''}`}>
@@ -1506,8 +1688,10 @@ export default function App() {
             onReset={handleReset}
             onOpenSafePreview={() => setShowSafePreview(true)}
             onOpenExportReport={() => setShowExportModal(true)}
+            onOpenExplainer={(topicId) => setExplainerTopic(topicId || 'ssl_recency')}
           />
         )}
+
 
 
           </>
