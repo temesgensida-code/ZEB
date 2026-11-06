@@ -430,8 +430,8 @@ def extract_sanitized_text_and_dom(soup: BeautifulSoup, base_url: str) -> dict:
     except Exception:
         clean_soup = BeautifulSoup('', 'html.parser')
 
-    # 1. Strip dangerous and active elements
-    for tag in clean_soup(['script', 'iframe', 'object', 'embed', 'noscript', 'canvas', 'svg', 'applet', 'meta']):
+    # 1. Strip dangerous and active elements (including templates, base, math, and active embeds)
+    for tag in clean_soup(['script', 'iframe', 'object', 'embed', 'noscript', 'canvas', 'svg', 'applet', 'meta', 'template', 'base', 'math']):
         tag.decompose()
 
     # Handle style and link tags: strip styles or rewrite stylesheets
@@ -443,12 +443,12 @@ def extract_sanitized_text_and_dom(soup: BeautifulSoup, base_url: str) -> dict:
                 continue
         tag.decompose()
 
-    # 2. Strip inline event handlers and dangerous protocol attributes
+    # 2. Strip inline event handlers, autofocus, and dangerous protocol attributes
     for el in clean_soup.find_all(True):
         attrs = dict(el.attrs)
         for attr, val in attrs.items():
             attr_lower = attr.lower()
-            if attr_lower.startswith('on'):
+            if attr_lower.startswith('on') or attr_lower == 'autofocus':
                 del el[attr]
             elif isinstance(val, str) and val.strip().lower().startswith(('javascript:', 'vbscript:', 'data:text/html')):
                 del el[attr]

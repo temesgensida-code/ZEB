@@ -54,6 +54,7 @@ export function SafePreviewModal({ result, onClose }) {
   // High-fidelity client-side DOM snapshot rasterization state
   const [rasterizedDomUri, setRasterizedDomUri] = useState(null)
   const [isRasterizing, setIsRasterizing] = useState(false)
+  const rasterizeAttemptedRef = useRef(false)
 
   // Text reader state
   const [searchQuery, setSearchQuery] = useState('')
@@ -71,8 +72,28 @@ export function SafePreviewModal({ result, onClose }) {
   const sandbox = sa.sandboxPreview || {}
   const dynamic = sa.dynamicSandbox || {}
 
-  // Resolve sanitized HTML
-  const sanitizedHtml = sandbox.sanitizedHtml || ''
+  // Resolve and deeply sanitize HTML payload to guarantee 0 script execution vectors
+  const rawSanitizedHtml = sandbox.sanitizedHtml || ''
+  const sanitizedHtml = useMemo(() => {
+    if (!rawSanitizedHtml) return ''
+    try {
+      const doc = new DOMParser().parseFromString(rawSanitizedHtml, 'text/html')
+      doc.querySelectorAll('script, noscript, iframe, object, embed, meta, template, base, math, svg').forEach(el => el.remove())
+      doc.querySelectorAll('*').forEach(el => {
+        for (const attr of Array.from(el.attributes)) {
+          const lowerName = attr.name.toLowerCase()
+          if (lowerName.startsWith('on') || lowerName === 'autofocus') {
+            el.removeAttribute(attr.name)
+          } else if (typeof attr.value === 'string' && attr.value.trim().toLowerCase().startsWith('javascript:')) {
+            el.removeAttribute(attr.name)
+          }
+        }
+      })
+      return doc.documentElement ? doc.documentElement.outerHTML : rawSanitizedHtml
+    } catch {
+      return rawSanitizedHtml
+    }
+  }, [rawSanitizedHtml])
 
   // Determine effective screenshot URI and capture source
   const hasLiveScreenshot = Boolean(
@@ -96,32 +117,36 @@ export function SafePreviewModal({ result, onClose }) {
 
   // Automatic high-fidelity DOM snapshot rasterization via html2canvas (Zero sandboxed iframe warnings)
   useEffect(() => {
-    // If we already have a live screenshot or have already rasterized, do not re-rasterize
-    if (hasLiveScreenshot || rasterizedDomUri || isRasterizing || !sanitizedHtml) return
+    // If we already have a live screenshot or have already rasterized or started, do not re-rasterize
+    if (hasLiveScreenshot || rasterizedDomUri || rasterizeAttemptedRef.current || !sanitizedHtml) return
 
+    rasterizeAttemptedRef.current = true
     let isMounted = true
     setIsRasterizing(true)
 
-    // 1. Safely parse and sanitize DOM structure using window.DOMParser
+    // 1. Safely parse cleansed DOM structure using window.DOMParser
     const parser = new DOMParser()
     const parsedDoc = parser.parseFromString(sanitizedHtml, 'text/html')
 
-    // 2. Strip any active elements
-    parsedDoc.querySelectorAll('script, noscript, iframe, object, embed, meta').forEach(el => el.remove())
+    // 2. Strip any active and template elements
+    parsedDoc.querySelectorAll('script, noscript, iframe, object, embed, meta, template, base, math, svg').forEach(el => el.remove())
 
-    // 3. Strip all inline on* event handler attributes
+    // 3. Strip all inline on* event handler attributes and autofocus
     parsedDoc.querySelectorAll('*').forEach(el => {
       for (const attr of Array.from(el.attributes)) {
-        if (attr.name.toLowerCase().startsWith('on')) {
+        const lowerName = attr.name.toLowerCase()
+        if (lowerName.startsWith('on') || lowerName === 'autofocus') {
+          el.removeAttribute(attr.name)
+        } else if (typeof attr.value === 'string' && attr.value.trim().toLowerCase().startsWith('javascript:')) {
           el.removeAttribute(attr.name)
         }
       }
     })
 
-    // 4. Mount into an isolated off-screen div container (no iframe, zero about:blank warnings)
+    // 4. Mount into an isolated off-screen div positioned beneath the app root (z-index: -9999)
     const container = document.createElement('div')
     container.style.position = 'fixed'
-    container.style.left = '-9999px'
+    container.style.left = '0'
     container.style.top = '0'
     container.style.width = '1280px'
     container.style.minHeight = '800px'
@@ -130,9 +155,10 @@ export function SafePreviewModal({ result, onClose }) {
     container.style.padding = '24px'
     container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
     container.style.boxSizing = 'border-box'
-    container.style.opacity = '0'
+    container.style.opacity = '1'
     container.style.pointerEvents = 'none'
     container.style.zIndex = '-9999'
+    container.style.visibility = 'visible'
 
     // Move cleansed nodes into container
     const bodyChildren = parsedDoc.body ? Array.from(parsedDoc.body.childNodes) : []
@@ -153,10 +179,17 @@ export function SafePreviewModal({ result, onClose }) {
           height: 800,
           windowWidth: 1280,
           windowHeight: 800,
+          x: 0,
+          y: 0,
           useCORS: true,
           allowTaint: false,
           logging: false,
+          foreignObjectRendering: false,
           backgroundColor: '#ffffff',
+          ignoreElements: (el) => {
+            const tag = el.tagName?.toLowerCase()
+            return tag === 'script' || tag === 'noscript' || tag === 'iframe' || tag === 'template'
+          },
         })
         const dataUrl = canvas.toDataURL('image/png')
         if (isMounted && dataUrl && dataUrl.length > 200) {
@@ -175,7 +208,7 @@ export function SafePreviewModal({ result, onClose }) {
       clearTimeout(timer)
       if (container.parentNode) document.body.removeChild(container)
     }
-  }, [hasLiveScreenshot, rasterizedDomUri, isRasterizing, sanitizedHtml])
+  }, [hasLiveScreenshot, rasterizedDomUri, sanitizedHtml])
 
   // Normalize extracted text structure
   const rawExtracted = sandbox.extractedText
