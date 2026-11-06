@@ -82,6 +82,7 @@ export default function PlainEnglishAdvisoryCard({ result, onOpenExplainer }) {
             {statusTheme === 'warning' && <Warning size={18} weight="bold" />}
             {statusTheme === 'safe' && <ShieldCheck size={18} weight="bold" />}
             {statusTheme === 'inspecting' && <span className="micro-spinner" />}
+            <span className={`advisory-status-dot dot-${statusTheme}`} />
           </span>
 
           <div className="advisory-title-group">

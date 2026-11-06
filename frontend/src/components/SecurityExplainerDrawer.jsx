@@ -6,15 +6,12 @@ import {
   ShieldWarning,
   ShieldCheck,
   Lightbulb,
-  MaskHappy,
   MaskSad,
   LockKey,
   MagnifyingGlass,
   CheckCircle,
   Pulse,
   Info,
-  ArrowsClockwise,
-
 } from '@phosphor-icons/react'
 import {
   SECURITY_KNOWLEDGE_BASE,
@@ -42,7 +39,7 @@ export default function SecurityExplainerDrawer({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  // Prevent background body scroll when drawer is open
+  // Prevent background body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -83,36 +80,41 @@ export default function SecurityExplainerDrawer({
   if (!isOpen) return null
 
   return (
-    <div className="explainer-drawer-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="explainer-modal-title"
+    >
       <div
-        className="explainer-drawer-panel"
+        className="modal-dialog explainer-modal-dialog"
         onClick={e => e.stopPropagation()}
       >
-        {/* Mobile touch drag indicator */}
-        <div className="drawer-handle-bar-mobile" />
-
-        {/* Drawer Top Navigation Header */}
-        <div className="drawer-top-header">
-          <div className="drawer-header-left">
-            <div className="drawer-icon-bubble">
-              <BookOpen size={18} weight="bold" />
-            </div>
+        {/* Modal Header Section (matching InfoModal) */}
+        <div className="modal-header-section">
+          <div className="modal-title-lockup">
+            <BookOpen size={20} weight="bold" />
             <div>
-              <span className="drawer-eyebrow">SECURITY ADVISOR & GLOSSARY</span>
-              <h2 className="drawer-main-title">Explain This Risk</h2>
+              <h2 id="explainer-modal-title" className="modal-heading-text">
+                Explain This Risk
+              </h2>
+              <span className="sandbox-isolation-badge">
+                PASSIVE THREAT INTELLIGENCE & PLAIN-ENGLISH ADVISOR
+              </span>
             </div>
           </div>
           <button
             type="button"
-            className="drawer-close-btn"
+            className="mech-btn modal-close-btn"
             onClick={onClose}
             aria-label="Close Security Explainer"
           >
-            <X size={18} weight="bold" />
+            <X size={16} weight="bold" />
           </button>
         </div>
 
-        {/* Tabs: Issues in Current Scan vs. Security Glossary */}
+        {/* Navigation Tabs: Issues in Current Scan vs. Threat Encyclopedia */}
         <div className="drawer-nav-tabs">
           <button
             type="button"
@@ -149,7 +151,8 @@ export default function SecurityExplainerDrawer({
                       className={`detected-mini-pill ${isActive ? 'active' : ''} sev-${item.severity.toLowerCase()}`}
                       onClick={() => onSelectTopic(tid)}
                     >
-                      {item.title.split('(')[0].trim()}
+                      <span className="micro-sev-dot" />
+                      <span>{item.title.split('(')[0].trim()}</span>
                     </button>
                   )
                 })
@@ -198,16 +201,17 @@ export default function SecurityExplainerDrawer({
           </div>
         )}
 
-        {/* Active Topic Body Content */}
-        <div className="drawer-scroll-body">
+        {/* Scrollable Modal Body Section */}
+        <div className="modal-body-section explainer-modal-body">
           {/* Active Topic Header Card */}
           <div className="active-topic-card">
             <div className="topic-meta-row">
               <span className={`topic-severity-badge sev-${currentTopic.severity.toLowerCase()}`}>
-                {currentTopic.severity} SEVERITY
+                <span className="micro-sev-dot" />
+                {currentTopic.severity}
               </span>
               <span className="topic-technical-term">
-                Technical: <code>{currentTopic.technicalTerm}</code>
+                <code>{currentTopic.technicalTerm}</code>
               </span>
             </div>
             <h3 className="topic-title">{currentTopic.title}</h3>
@@ -217,19 +221,19 @@ export default function SecurityExplainerDrawer({
           {liveTelemetry && (
             <div className="telemetry-live-callout">
               <div className="telemetry-live-header">
-                <Pulse size={15} weight="bold" />
-                <span>What We Found in Your URL</span>
+                <Pulse size={14} weight="bold" />
+                <span>WHAT WE FOUND IN YOUR URL</span>
               </div>
               <p className="telemetry-live-text">{liveTelemetry}</p>
             </div>
           )}
 
-          {/* 4-Part Structured Educational Breakdown */}
+          {/* 4-Part Structured Educational Breakdown (Monochrome Aesthetic) */}
           <div className="four-part-guide-stack">
             {/* Part 1: In Plain English */}
             <div className="four-part-card card-plain-english">
               <div className="part-header">
-                <span className="part-icon-wrap icon-lightbulb">
+                <span className="part-icon-wrap">
                   <Lightbulb size={16} weight="bold" />
                 </span>
                 <span className="part-title">In Plain English</span>
@@ -237,7 +241,7 @@ export default function SecurityExplainerDrawer({
               <p className="part-text">{currentTopic.inPlainEnglish.definition}</p>
               {currentTopic.inPlainEnglish.analogy && (
                 <div className="part-analogy-box">
-                  <span className="analogy-label">💡 REAL-WORLD ANALOGY:</span>
+                  <span className="analogy-label">REAL-WORLD ANALOGY:</span>
                   <p className="analogy-text">{currentTopic.inPlainEnglish.analogy}</p>
                 </div>
               )}
@@ -246,7 +250,7 @@ export default function SecurityExplainerDrawer({
             {/* Part 2: The Attacker's Trick */}
             <div className="four-part-card card-attacker-trick">
               <div className="part-header">
-                <span className="part-icon-wrap icon-trick">
+                <span className="part-icon-wrap">
                   <MaskSad size={16} weight="bold" />
                 </span>
                 <span className="part-title">The Attacker's Trick</span>
@@ -257,19 +261,18 @@ export default function SecurityExplainerDrawer({
             {/* Part 3: What Could Happen to You */}
             <div className="four-part-card card-personal-danger">
               <div className="part-header">
-                <span className="part-icon-wrap icon-danger">
+                <span className="part-icon-wrap">
                   <ShieldWarning size={16} weight="bold" />
                 </span>
                 <span className="part-title">What Could Happen to You</span>
               </div>
-
               <p className="part-text">{currentTopic.whatCouldHappenToYou}</p>
             </div>
 
             {/* Part 4: What You Should Do */}
             <div className="four-part-card card-action-advice">
               <div className="part-header">
-                <span className="part-icon-wrap icon-shield">
+                <span className="part-icon-wrap">
                   <ShieldCheck size={16} weight="bold" />
                 </span>
                 <span className="part-title">What You Should Do</span>
@@ -279,13 +282,13 @@ export default function SecurityExplainerDrawer({
           </div>
         </div>
 
-        {/* Drawer Footer */}
-        <div className="drawer-footer-row">
+        {/* Modal Footer (matching InfoModal) */}
+        <div className="modal-footer-section explainer-modal-footer">
           <span className="drawer-footer-note">
-            <Info size={13} weight="bold" /> Passively verified in isolated cloud environment.
+            <Info size={13} weight="bold" /> Passive heuristics evaluated in isolated sandbox containers.
           </span>
           <button type="button" className="mech-btn" onClick={onClose}>
-            Close Explainer
+            Close
           </button>
         </div>
       </div>
