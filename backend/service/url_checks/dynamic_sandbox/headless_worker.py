@@ -45,15 +45,43 @@ class HeadlessBrowserWorker:
             suspicious_exfil: list[dict[str, Any]] = []
 
             with sync_playwright() as p:
-                browser = p.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-web-security',
-                    ],
-                )
+                browser = None
+                launch_errors = []
+
+                # Attempt 1: Chromium with hardened container args
+                try:
+                    browser = p.chromium.launch(
+                        headless=True,
+                        args=[
+                            '--no-sandbox',
+                            '--disable-setuid-sandbox',
+                            '--disable-dev-shm-usage',
+                            '--disable-gpu',
+                            '--single-process',
+                            '--disable-web-security',
+                        ],
+                    )
+                except Exception as exc_chrom:
+                    launch_errors.append(f"Chromium: {exc_chrom}")
+
+                # Attempt 2: Fallback to Firefox if Chromium executable is missing
+                if browser is None:
+                    try:
+                        browser = p.firefox.launch(headless=True)
+                    except Exception as exc_ff:
+                        launch_errors.append(f"Firefox: {exc_ff}")
+
+                if browser is None:
+                    return {
+                        'available': False,
+                        'executed': False,
+                        'error': f"Browser launch failed: {'; '.join(launch_errors)}",
+                        'hydratedHtml': None,
+                        'screenshotDataUri': None,
+                        'interceptedRequests': [],
+                        'suspiciousExfiltrations': [],
+                    }
+
                 context = browser.new_context(
                     viewport={'width': 1280, 'height': 800},
                     user_agent=(

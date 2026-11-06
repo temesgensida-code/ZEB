@@ -10,3 +10,4 @@ whitenoise==6.9.0
 django-cors-headers==4.7.0
 pymongo>=4.7.2
 mongomock>=4.1.2
+playwright>=1.49.0

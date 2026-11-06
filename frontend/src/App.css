@@ -1978,6 +1978,66 @@
   color: var(--btn-primary-text);
 }
 
+.preview-toolbar-right-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preview-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  line-height: 1;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-muted);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.preview-source-pill .source-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.preview-source-pill.source-live .source-dot {
+  background-color: #10b981;
+}
+
+.preview-source-pill.source-snapshot .source-dot {
+  background-color: #f59e0b;
+}
+
+.recapture-live-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  line-height: 1;
+  padding: 0 8px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
 .preview-zoom-actions {
   display: flex;
   align-items: center;
@@ -2040,6 +2100,63 @@
   box-shadow: var(--btn-shadow);
   transition: transform 0.15s ease;
   object-fit: contain;
+}
+
+.capture-subtle-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  background: var(--bg-page);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-muted);
+  flex-shrink: 0;
+}
+
+.capture-subtle-notice svg {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.notice-dismiss-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.notice-dismiss-btn:hover {
+  color: var(--text-primary);
+}
+
+.preview-loading-card {
+  margin: auto;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 480px;
+  color: var(--text-primary);
+}
+
+.loading-card-title {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+
+.loading-card-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .preview-fallback-box {

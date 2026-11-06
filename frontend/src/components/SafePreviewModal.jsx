@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import html2canvas from 'html2canvas'
 import {
   X,
   Eye,
@@ -45,10 +46,14 @@ export function SafePreviewModal({ result, onClose }) {
   const [domViewport, setDomViewport] = useState('desktop') // 'desktop' | 'mobile'
   const [zoomLevel, setZoomLevel] = useState(1)
 
-  // On-demand screenshot state
+  // Live headless capture state
   const [capturedScreenshotUri, setCapturedScreenshotUri] = useState(null)
   const [isCapturing, setIsCapturing] = useState(false)
-  const [captureError, setCaptureError] = useState(null)
+  const [captureNotice, setCaptureNotice] = useState(null)
+
+  // High-fidelity client-side DOM snapshot rasterization state
+  const [rasterizedDomUri, setRasterizedDomUri] = useState(null)
+  const [isRasterizing, setIsRasterizing] = useState(false)
 
   // Text reader state
   const [searchQuery, setSearchQuery] = useState('')
@@ -66,16 +71,115 @@ export function SafePreviewModal({ result, onClose }) {
   const sandbox = sa.sandboxPreview || {}
   const dynamic = sa.dynamicSandbox || {}
 
-  // Resolve screenshot URI from scan results or on-demand capture
-  const screenshotUri =
+  // Resolve sanitized HTML
+  const sanitizedHtml = sandbox.sanitizedHtml || ''
+
+  // Determine effective screenshot URI and capture source
+  const hasLiveScreenshot = Boolean(
+    capturedScreenshotUri ||
+    dynamic?.screenshot?.dataUri ||
+    sandbox?.screenshotDataUri ||
+    result?.screenshotDataUri
+  )
+
+  const effectiveScreenshotUri =
     capturedScreenshotUri ||
     dynamic?.screenshot?.dataUri ||
     sandbox?.screenshotDataUri ||
     result?.screenshotDataUri ||
+    rasterizedDomUri ||
     null
 
-  // Resolve sanitized HTML
-  const sanitizedHtml = sandbox.sanitizedHtml || ''
+  const captureSource = hasLiveScreenshot
+    ? 'live'
+    : (rasterizedDomUri ? 'snapshot' : null)
+
+  // Automatic high-fidelity DOM snapshot rasterization via html2canvas
+  useEffect(() => {
+    // If we already have a live screenshot or have already rasterized, do not re-rasterize
+    if (hasLiveScreenshot || rasterizedDomUri || isRasterizing || !sanitizedHtml) return
+
+    let isMounted = true
+    setIsRasterizing(true)
+
+    // Render inside a hidden, isolated iframe to ensure 0 external scripts execute
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.left = '-9999px'
+    iframe.style.top = '-9999px'
+    iframe.style.width = '1280px'
+    iframe.style.height = '800px'
+    iframe.style.opacity = '0'
+    iframe.style.pointerEvents = 'none'
+    iframe.setAttribute('sandbox', 'allow-same-origin')
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) {
+      if (iframe.parentNode) document.body.removeChild(iframe)
+      setIsRasterizing(false)
+      return
+    }
+
+    doc.open()
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              margin: 0;
+              padding: 24px;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              background: #ffffff;
+              color: #111827;
+              box-sizing: border-box;
+            }
+          </style>
+        </head>
+        <body>
+          ${sanitizedHtml}
+        </body>
+      </html>
+    `)
+    doc.close()
+
+    const timer = setTimeout(async () => {
+      try {
+        if (!iframe.contentDocument?.body) {
+          if (isMounted) setIsRasterizing(false)
+          if (iframe.parentNode) document.body.removeChild(iframe)
+          return
+        }
+        const canvas = await html2canvas(iframe.contentDocument.body, {
+          width: 1280,
+          height: 800,
+          windowWidth: 1280,
+          windowHeight: 800,
+          useCORS: true,
+          allowTaint: false,
+          logging: false,
+          backgroundColor: '#ffffff',
+        })
+        const dataUrl = canvas.toDataURL('image/png')
+        if (isMounted && dataUrl && dataUrl.length > 200) {
+          setRasterizedDomUri(dataUrl)
+        }
+      } catch (err) {
+        console.warn('DOM snapshot rasterization fallback handled:', err)
+      } finally {
+        if (isMounted) setIsRasterizing(false)
+        if (iframe.parentNode) document.body.removeChild(iframe)
+      }
+    }, 180)
+
+    return () => {
+      isMounted = false
+      clearTimeout(timer)
+      if (iframe.parentNode) document.body.removeChild(iframe)
+    }
+  }, [hasLiveScreenshot, rasterizedDomUri, isRasterizing, sanitizedHtml])
 
   // Normalize extracted text structure
   const rawExtracted = sandbox.extractedText
@@ -139,7 +243,7 @@ export function SafePreviewModal({ result, onClose }) {
 
   async function handleCaptureScreenshot() {
     setIsCapturing(true)
-    setCaptureError(null)
+    setCaptureNotice(null)
     try {
       const resp = await fetch('/api/safe-preview/screenshot/', {
         method: 'POST',
@@ -151,14 +255,14 @@ export function SafePreviewModal({ result, onClose }) {
         setCapturedScreenshotUri(data.screenshotDataUri)
         setVisualSubMode('screenshot')
       } else {
-        setCaptureError(
-          data.error || 'Live screenshot is unavailable in this environment. Showing Air-Gapped Sanitized DOM Frame.'
+        setCaptureNotice(
+          data.error
+            ? `Notice: ${data.error}`
+            : 'Live browser restricted in this environment. Retaining high-fidelity sanitized snapshot.'
         )
-        setVisualSubMode('dom')
       }
     } catch (_err) {
-      setCaptureError('Failed to capture live screenshot. Falling back to Sanitized DOM Frame.')
-      setVisualSubMode('dom')
+      setCaptureNotice('Live browser unavailable. Retaining high-fidelity sanitized snapshot.')
     } finally {
       setIsCapturing(false)
     }
@@ -311,36 +415,65 @@ export function SafePreviewModal({ result, onClose }) {
                 </button>
               </div>
 
-              {visualSubMode === 'screenshot' && screenshotUri && (
-                <div className="preview-zoom-actions">
-                  <span className="zoom-level-indicator">{Math.round(zoomLevel * 100)}%</span>
+              {visualSubMode === 'screenshot' && effectiveScreenshotUri && (
+                <div className="preview-toolbar-right-group">
+                  {/* Capture Source Badge */}
+                  <div className={`preview-source-pill source-${captureSource}`}>
+                    <span className="source-dot" />
+                    <span>{captureSource === 'live' ? 'LIVE CHROMIUM CAPTURE' : 'SANITIZED SNAPSHOT'}</span>
+                  </div>
+
+                  {/* Re-capture Live Button */}
                   <button
                     type="button"
-                    className="mech-btn zoom-btn"
-                    onClick={handleZoomOut}
-                    title="Zoom Out"
-                    aria-label="Zoom Out"
+                    className="mech-btn recapture-live-btn"
+                    onClick={handleCaptureScreenshot}
+                    disabled={isCapturing}
+                    title="Attempt fresh live headless Chromium screenshot"
                   >
-                    <MagnifyingGlassMinus size={14} weight="bold" />
+                    {isCapturing ? (
+                      <>
+                        <CircleNotch size={12} weight="bold" className="spin-icon" />
+                        <span>Capturing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={12} weight="bold" />
+                        <span>Re-capture Live</span>
+                      </>
+                    )}
                   </button>
-                  <button
-                    type="button"
-                    className="mech-btn zoom-btn"
-                    onClick={handleZoomIn}
-                    title="Zoom In"
-                    aria-label="Zoom In"
-                  >
-                    <MagnifyingGlassPlus size={14} weight="bold" />
-                  </button>
-                  <button
-                    type="button"
-                    className="mech-btn zoom-btn"
-                    onClick={handleZoomReset}
-                    title="Reset Zoom"
-                    aria-label="Reset Zoom"
-                  >
-                    <ArrowsCounterClockwise size={14} weight="bold" />
-                  </button>
+
+                  <div className="preview-zoom-actions">
+                    <span className="zoom-level-indicator">{Math.round(zoomLevel * 100)}%</span>
+                    <button
+                      type="button"
+                      className="mech-btn zoom-btn"
+                      onClick={handleZoomOut}
+                      title="Zoom Out"
+                      aria-label="Zoom Out"
+                    >
+                      <MagnifyingGlassMinus size={14} weight="bold" />
+                    </button>
+                    <button
+                      type="button"
+                      className="mech-btn zoom-btn"
+                      onClick={handleZoomIn}
+                      title="Zoom In"
+                      aria-label="Zoom In"
+                    >
+                      <MagnifyingGlassPlus size={14} weight="bold" />
+                    </button>
+                    <button
+                      type="button"
+                      className="mech-btn zoom-btn"
+                      onClick={handleZoomReset}
+                      title="Reset Zoom"
+                      aria-label="Reset Zoom"
+                    >
+                      <ArrowsCounterClockwise size={14} weight="bold" />
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -379,29 +512,40 @@ export function SafePreviewModal({ result, onClose }) {
                   <div className="watermark-banner">
                     [ZEB ISOLATED CLOUD SANDBOX — NO CLIENT-SIDE CODE EXECUTED]
                   </div>
-                  {screenshotUri ? (
+                  {captureNotice && (
+                    <div className="capture-subtle-notice">
+                      <WarningCircle size={13} weight="bold" />
+                      <span>{captureNotice}</span>
+                      <button type="button" className="notice-dismiss-btn" onClick={() => setCaptureNotice(null)}>
+                        <X size={11} weight="bold" />
+                      </button>
+                    </div>
+                  )}
+                  {effectiveScreenshotUri ? (
                     <div className="screenshot-pan-container">
                       <img
-                        src={screenshotUri}
+                        src={effectiveScreenshotUri}
                         alt={`Isolated screenshot render of ${result?.url}`}
                         className="screenshot-image"
                         style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}
                       />
                     </div>
+                  ) : isRasterizing || isCapturing ? (
+                    <div className="preview-loading-card">
+                      <CircleNotch size={36} weight="bold" className="spin-icon" />
+                      <p className="loading-card-title">Generating Air-Gapped Visual Snapshot...</p>
+                      <p className="loading-card-sub">
+                        Isolating sanitized DOM structure and pre-rendering safe visual frame
+                      </p>
+                    </div>
                   ) : (
                     <div className="preview-fallback-box">
                       <ShieldCheck size={44} weight="bold" />
-                      <p className="fallback-title">Headless Visual Screenshot</p>
+                      <p className="fallback-title">Visual Preview</p>
                       <p className="fallback-desc">
                         Passive inspection audited the target page with zero client script execution.
                         You can trigger an isolated live headless browser capture or inspect the Sanitized DOM Frame.
                       </p>
-                      {captureError && (
-                        <div className="capture-error-pill">
-                          <WarningCircle size={14} weight="bold" />
-                          <span>{captureError}</span>
-                        </div>
-                      )}
                       <div className="preview-action-row">
                         <button
                           type="button"
