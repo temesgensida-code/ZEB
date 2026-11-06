@@ -467,7 +467,6 @@ def extract_sanitized_text_and_dom(soup: BeautifulSoup, base_url: str) -> dict:
         elif el.name == 'form':
             el['action'] = '#'
             el['method'] = 'GET'
-            el['onsubmit'] = 'return false;'
 
     # 3. Extract semantic structured hierarchy
     title = clean_soup.title.string.strip() if clean_soup.title and clean_soup.title.string else ''

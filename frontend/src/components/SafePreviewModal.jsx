@@ -94,7 +94,7 @@ export function SafePreviewModal({ result, onClose }) {
     ? 'live'
     : (rasterizedDomUri ? 'snapshot' : null)
 
-  // Automatic high-fidelity DOM snapshot rasterization via html2canvas
+  // Automatic high-fidelity DOM snapshot rasterization via html2canvas (Zero sandboxed iframe warnings)
   useEffect(() => {
     // If we already have a live screenshot or have already rasterized, do not re-rasterize
     if (hasLiveScreenshot || rasterizedDomUri || isRasterizing || !sanitizedHtml) return
@@ -102,57 +102,53 @@ export function SafePreviewModal({ result, onClose }) {
     let isMounted = true
     setIsRasterizing(true)
 
-    // Render inside a hidden, isolated iframe to ensure 0 external scripts execute
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'
-    iframe.style.left = '-9999px'
-    iframe.style.top = '-9999px'
-    iframe.style.width = '1280px'
-    iframe.style.height = '800px'
-    iframe.style.opacity = '0'
-    iframe.style.pointerEvents = 'none'
-    iframe.setAttribute('sandbox', 'allow-same-origin')
-    document.body.appendChild(iframe)
+    // 1. Safely parse and sanitize DOM structure using window.DOMParser
+    const parser = new DOMParser()
+    const parsedDoc = parser.parseFromString(sanitizedHtml, 'text/html')
 
-    const doc = iframe.contentDocument || iframe.contentWindow?.document
-    if (!doc) {
-      if (iframe.parentNode) document.body.removeChild(iframe)
-      setIsRasterizing(false)
-      return
+    // 2. Strip any active elements
+    parsedDoc.querySelectorAll('script, noscript, iframe, object, embed, meta').forEach(el => el.remove())
+
+    // 3. Strip all inline on* event handler attributes
+    parsedDoc.querySelectorAll('*').forEach(el => {
+      for (const attr of Array.from(el.attributes)) {
+        if (attr.name.toLowerCase().startsWith('on')) {
+          el.removeAttribute(attr.name)
+        }
+      }
+    })
+
+    // 4. Mount into an isolated off-screen div container (no iframe, zero about:blank warnings)
+    const container = document.createElement('div')
+    container.style.position = 'fixed'
+    container.style.left = '-9999px'
+    container.style.top = '0'
+    container.style.width = '1280px'
+    container.style.minHeight = '800px'
+    container.style.background = '#ffffff'
+    container.style.color = '#111827'
+    container.style.padding = '24px'
+    container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+    container.style.boxSizing = 'border-box'
+    container.style.opacity = '0'
+    container.style.pointerEvents = 'none'
+    container.style.zIndex = '-9999'
+
+    // Move cleansed nodes into container
+    const bodyChildren = parsedDoc.body ? Array.from(parsedDoc.body.childNodes) : []
+    if (bodyChildren.length > 0) {
+      bodyChildren.forEach(node => container.appendChild(node.cloneNode(true)))
+    } else {
+      container.innerHTML = parsedDoc.documentElement ? parsedDoc.documentElement.innerHTML : sanitizedHtml
     }
 
-    doc.open()
-    doc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body {
-              margin: 0;
-              padding: 24px;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              background: #ffffff;
-              color: #111827;
-              box-sizing: border-box;
-            }
-          </style>
-        </head>
-        <body>
-          ${sanitizedHtml}
-        </body>
-      </html>
-    `)
-    doc.close()
+    document.body.appendChild(container)
 
     const timer = setTimeout(async () => {
       try {
-        if (!iframe.contentDocument?.body) {
-          if (isMounted) setIsRasterizing(false)
-          if (iframe.parentNode) document.body.removeChild(iframe)
-          return
-        }
-        const canvas = await html2canvas(iframe.contentDocument.body, {
+        if (!container.parentNode) return
+
+        const canvas = await html2canvas(container, {
           width: 1280,
           height: 800,
           windowWidth: 1280,
@@ -170,14 +166,14 @@ export function SafePreviewModal({ result, onClose }) {
         console.warn('DOM snapshot rasterization fallback handled:', err)
       } finally {
         if (isMounted) setIsRasterizing(false)
-        if (iframe.parentNode) document.body.removeChild(iframe)
+        if (container.parentNode) document.body.removeChild(container)
       }
     }, 180)
 
     return () => {
       isMounted = false
       clearTimeout(timer)
-      if (iframe.parentNode) document.body.removeChild(iframe)
+      if (container.parentNode) document.body.removeChild(container)
     }
   }, [hasLiveScreenshot, rasterizedDomUri, isRasterizing, sanitizedHtml])
 
