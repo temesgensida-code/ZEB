@@ -59,21 +59,21 @@
 
   --grid-plus-stroke:   rgba(0, 0, 0, 0.08);
 
-  /* Functional Risk Accents */
-  --risk-safe-text:     #059669;
-  --risk-safe-bg:       #ECFDF5;
-  --risk-safe-border:   #10B981;
-  --risk-safe-accent:   #10B981;
+  /* Functional Risk Accents — Light Pastel & Soft Tones (50% Boldness Reduction) */
+  --risk-safe-text:     #2D7D5E;
+  --risk-safe-bg:       #F4FBF7;
+  --risk-safe-border:   #98DFBF;
+  --risk-safe-accent:   #4ADE80;
 
-  --risk-warn-text:     #D97706;
-  --risk-warn-bg:       #FFFBEB;
-  --risk-warn-border:   #F59E0B;
-  --risk-warn-accent:   #F59E0B;
+  --risk-warn-text:     #A36E27;
+  --risk-warn-bg:       #FEFDF6;
+  --risk-warn-border:   #F5D699;
+  --risk-warn-accent:   #F6BA5A;
 
-  --risk-danger-text:   #DC2626;
-  --risk-danger-bg:     #FEF2F2;
-  --risk-danger-border: #EF4444;
-  --risk-danger-accent: #EF4444;
+  --risk-danger-text:   #B95353;
+  --risk-danger-bg:     #FFF5F5;
+  --risk-danger-border: #F4A8A8;
+  --risk-danger-accent: #E57373;
 
   --focus-ring:         var(--mono-0);
 }
@@ -105,21 +105,21 @@
 
   --grid-plus-stroke:   rgba(255, 255, 255, 0.09);
 
-  /* Functional Risk Accents */
-  --risk-safe-text:     #34D399;
-  --risk-safe-bg:       rgba(16, 185, 129, 0.12);
-  --risk-safe-border:   #059669;
-  --risk-safe-accent:   #10B981;
+  /* Functional Risk Accents — Light Pastel & Soft Tones (50% Boldness Reduction) */
+  --risk-safe-text:     #86EFAC;
+  --risk-safe-bg:       rgba(110, 231, 183, 0.08);
+  --risk-safe-border:   #2E6F52;
+  --risk-safe-accent:   #6EE7B7;
 
-  --risk-warn-text:     #FBBF24;
-  --risk-warn-bg:       rgba(245, 158, 11, 0.12);
-  --risk-warn-border:   #D97706;
-  --risk-warn-accent:   #F59E0B;
+  --risk-warn-text:     #FDE68A;
+  --risk-warn-bg:       rgba(246, 186, 90, 0.08);
+  --risk-warn-border:   #7C5726;
+  --risk-warn-accent:   #F6BA5A;
 
-  --risk-danger-text:   #F87171;
-  --risk-danger-bg:     rgba(239, 68, 68, 0.12);
-  --risk-danger-border: #DC2626;
-  --risk-danger-accent: #EF4444;
+  --risk-danger-text:   #FCA5A5;
+  --risk-danger-bg:     rgba(244, 168, 168, 0.08);
+  --risk-danger-border: #8E4A4A;
+  --risk-danger-accent: #E57373;
 
   --focus-ring:         var(--mono-100);
 }

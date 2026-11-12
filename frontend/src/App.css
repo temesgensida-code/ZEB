@@ -1344,7 +1344,7 @@
 .copy-mini-btn.copy-icon-only.copied {
   background-color: transparent;
   color: var(--risk-safe-text);
-  border-color: var(--risk-safe-accent, #10b981);
+  border-color: var(--risk-safe-accent);
 }
 
 .verdict-explanation-msg {
@@ -1376,7 +1376,7 @@
 .threat-record {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  border-top: 1px solid var(--risk-danger-border);
 }
 
 .threat-record-header {
@@ -2015,11 +2015,11 @@
 }
 
 .preview-source-pill.source-live .source-dot {
-  background-color: #10b981;
+  background-color: var(--risk-safe-accent);
 }
 
 .preview-source-pill.source-snapshot .source-dot {
-  background-color: #f59e0b;
+  background-color: var(--risk-warn-accent);
 }
 
 .recapture-live-btn {
@@ -2117,7 +2117,7 @@
 }
 
 .capture-subtle-notice svg {
-  color: #f59e0b;
+  color: var(--risk-warn-accent);
   flex-shrink: 0;
 }
 
@@ -3562,21 +3562,21 @@
 }
 
 .stream-mini-badge.badge-clean {
-  background-color: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #10b981;
+  background-color: var(--risk-safe-bg);
+  border-color: var(--risk-safe-border);
+  color: var(--risk-safe-text);
 }
 
 .stream-mini-badge.badge-flagged {
-  background-color: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  background-color: var(--risk-danger-bg);
+  border-color: var(--risk-danger-border);
+  color: var(--risk-danger-text);
 }
 
 .stream-mini-badge.badge-degraded {
-  background-color: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #f59e0b;
+  background-color: var(--risk-warn-bg);
+  border-color: var(--risk-warn-border);
+  color: var(--risk-warn-text);
 }
 
 .stream-mini-badge.badge-pending {
@@ -3618,12 +3618,12 @@
 
 /* Critical Escalation Banner */
 .critical-escalation-banner {
-  border-left: 4px solid #ef4444 !important;
-  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-left: 4px solid var(--risk-danger-accent) !important;
+  background-color: var(--risk-danger-bg) !important;
 }
 
 .critical-escalation-banner .threat-badge {
-  background-color: #ef4444 !important;
+  background-color: var(--risk-danger-accent) !important;
   color: #ffffff !important;
 }
 
@@ -3642,15 +3642,15 @@
 }
 
 .engine-status-badge.badge-clean {
-  background-color: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #10b981;
+  background-color: var(--risk-safe-bg);
+  border-color: var(--risk-safe-border);
+  color: var(--risk-safe-text);
 }
 
 .engine-status-badge.badge-flagged {
-  background-color: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  background-color: var(--risk-danger-bg);
+  border-color: var(--risk-danger-border);
+  color: var(--risk-danger-text);
 }
 
 .stream-pending-row {
@@ -3751,18 +3751,18 @@
 }
 
 .plain-advisory-card.advisory-danger {
-  border-left-color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.03);
+  border-left-color: var(--risk-danger-accent);
+  background-color: var(--risk-danger-bg);
 }
 
 .plain-advisory-card.advisory-warning {
-  border-left-color: #f59e0b;
-  background-color: rgba(245, 158, 11, 0.03);
+  border-left-color: var(--risk-warn-accent);
+  background-color: var(--risk-warn-bg);
 }
 
 .plain-advisory-card.advisory-safe {
-  border-left-color: #10b981;
-  background-color: rgba(16, 185, 129, 0.03);
+  border-left-color: var(--risk-safe-accent);
+  background-color: var(--risk-safe-bg);
 }
 
 .plain-advisory-card.advisory-inspecting {
@@ -3810,15 +3810,15 @@
 }
 
 .advisory-status-dot.dot-danger {
-  background-color: #ef4444;
+  background-color: var(--risk-danger-accent);
 }
 
 .advisory-status-dot.dot-warning {
-  background-color: #f59e0b;
+  background-color: var(--risk-warn-accent);
 }
 
 .advisory-status-dot.dot-safe {
-  background-color: #10b981;
+  background-color: var(--risk-safe-accent);
 }
 
 .advisory-status-dot.dot-inspecting {
@@ -3937,15 +3937,15 @@
 }
 
 .advisory-action-item.action-critical svg {
-  color: #ef4444;
+  color: var(--risk-danger-accent);
 }
 
 .advisory-action-item.action-warn svg {
-  color: #f59e0b;
+  color: var(--risk-warn-accent);
 }
 
 .advisory-action-item.action-clean svg {
-  color: #10b981;
+  color: var(--risk-safe-accent);
 }
 
 /* ─── Security Explainer Modal Dialog (Centered Modal) ────────────────────── */
@@ -4087,22 +4087,22 @@
 
 .sev-critical .micro-sev-dot,
 .topic-severity-badge.sev-critical .micro-sev-dot {
-  background-color: #ef4444;
+  background-color: var(--risk-danger-accent);
 }
 
 .sev-high .micro-sev-dot,
 .topic-severity-badge.sev-high .micro-sev-dot {
-  background-color: #f59e0b;
+  background-color: var(--risk-warn-accent);
 }
 
 .sev-medium .micro-sev-dot,
 .topic-severity-badge.sev-medium .micro-sev-dot {
-  background-color: #eab308;
+  background-color: var(--risk-warn-accent);
 }
 
 .sev-low .micro-sev-dot,
 .topic-severity-badge.sev-low .micro-sev-dot {
-  background-color: #10b981;
+  background-color: var(--risk-safe-accent);
 }
 
 .clean-scan-note {
@@ -4110,7 +4110,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.75rem;
-  color: #10b981;
+  color: var(--risk-safe-text);
 }
 
 /* Search bar in glossary */
@@ -4238,23 +4238,23 @@
 }
 
 .topic-severity-badge.sev-critical {
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  border-color: var(--risk-danger-border);
+  color: var(--risk-danger-text);
 }
 
 .topic-severity-badge.sev-high {
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #f59e0b;
+  border-color: var(--risk-warn-border);
+  color: var(--risk-warn-text);
 }
 
 .topic-severity-badge.sev-medium {
-  border-color: rgba(234, 179, 8, 0.4);
-  color: #ca8a04;
+  border-color: var(--risk-warn-border);
+  color: var(--risk-warn-text);
 }
 
 .topic-severity-badge.sev-low {
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #10b981;
+  border-color: var(--risk-safe-border);
+  color: var(--risk-safe-text);
 }
 
 .topic-technical-term {
@@ -4711,15 +4711,15 @@
 }
 
 .decomp-score-tag.score-clean {
-  background: rgba(34, 197, 94, 0.12);
+  background: var(--risk-safe-bg);
   color: var(--risk-safe-text);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  border: 1px solid var(--risk-safe-border);
 }
 
 .decomp-score-tag.score-danger {
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--risk-danger-bg);
   color: var(--risk-danger-accent);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--risk-danger-border);
 }
 
 .decomp-formula-card {
@@ -4847,9 +4847,9 @@
   font-weight: 800;
   padding: 3px 8px;
   border-radius: 3px;
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--risk-danger-bg);
   color: var(--risk-danger-accent);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--risk-danger-border);
   flex-shrink: 0;
 }
 
@@ -4923,8 +4923,8 @@
   gap: 12px;
   padding: 14px 16px;
   border-radius: var(--radius-xs);
-  background: rgba(34, 197, 94, 0.06);
-  border: 1px solid rgba(34, 197, 94, 0.25);
+  background: var(--risk-safe-bg);
+  border: 1px solid var(--risk-safe-border);
   color: var(--risk-safe-text);
   font-size: 0.8125rem;
 }
@@ -4980,9 +4980,9 @@
 }
 
 .category-rule-item.is-active {
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--risk-danger-bg);
   color: var(--text-primary);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid var(--risk-danger-border);
 }
 
 .rule-item-left {

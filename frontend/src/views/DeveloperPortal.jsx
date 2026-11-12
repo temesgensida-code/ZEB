@@ -653,7 +653,7 @@ print(response.json())`
                         <td><code>{log.target_url || '—'}</code></td>
                         <td>
                           <span style={{
-                            color: log.response_status === 200 ? 'var(--risk-safe-text, #10b981)' : 'var(--risk-danger-text)',
+                            color: log.response_status === 200 ? 'var(--risk-safe-text)' : 'var(--risk-danger-text)',
                             fontWeight: 700,
                           }}>
                             {log.response_status}
