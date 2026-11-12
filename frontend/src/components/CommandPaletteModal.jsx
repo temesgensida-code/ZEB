@@ -22,16 +22,21 @@ export function CommandPaletteModal({
   isOpen,
   onClose,
   hasResult,
+  currentResult,
+  result,
   onFocusInput,
   onPasteAndInspect,
   onCopyDefanged,
   onCopyIncidentBrief,
   onOpenSafePreview,
   onOpenExport,
+  onOpenExportReport,
   onOpenRiskDecomposition,
   onOpenHowItWorks,
   onSelectPreset,
+  onInspectUrl,
   onNavigate,
+  onSwitchView,
   currentView,
   onCycleTheme,
 }) {
@@ -39,6 +44,11 @@ export function CommandPaletteModal({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
+
+  const isResultAvailable = Boolean(hasResult ?? currentResult ?? result)
+  const selectPresetHandler = onSelectPreset || onInspectUrl
+  const exportHandler = onOpenExport || onOpenExportReport
+  const navigateHandler = onNavigate || onSwitchView
 
   // Focus input on open
   useEffect(() => {
@@ -80,7 +90,7 @@ export function CommandPaletteModal({
         shortcut: 'D',
         icon: <Copy size={16} weight="bold" />,
         action: onCopyDefanged,
-        available: hasResult,
+        available: isResultAvailable,
       },
       {
         id: 'copy-incident-brief',
@@ -90,7 +100,7 @@ export function CommandPaletteModal({
         shortcut: 'B',
         icon: <ShareNetwork size={16} weight="bold" />,
         action: onCopyIncidentBrief,
-        available: hasResult,
+        available: isResultAvailable,
       },
       {
         id: 'open-preview',
@@ -100,7 +110,7 @@ export function CommandPaletteModal({
         shortcut: 'P',
         icon: <Eye size={16} weight="bold" />,
         action: onOpenSafePreview,
-        available: hasResult,
+        available: isResultAvailable,
       },
       {
         id: 'open-export',
@@ -109,8 +119,8 @@ export function CommandPaletteModal({
         desc: 'Generates STIX 2.1 JSON bundle, IOC defanged list, and markdown report',
         shortcut: 'E',
         icon: <DownloadSimple size={16} weight="bold" />,
-        action: onOpenExport,
-        available: hasResult,
+        action: exportHandler,
+        available: isResultAvailable,
       },
       {
         id: 'open-risk-decomp',
@@ -120,7 +130,7 @@ export function CommandPaletteModal({
         shortcut: 'R',
         icon: <Calculator size={16} weight="bold" />,
         action: onOpenRiskDecomposition,
-        available: hasResult,
+        available: isResultAvailable,
       },
       {
         id: 'preset-clean',
@@ -129,7 +139,7 @@ export function CommandPaletteModal({
         desc: 'Standard HTTPS repository host with mature domain history',
         shortcut: null,
         icon: <ShieldCheck size={16} weight="bold" />,
-        action: () => onSelectPreset('https://github.com'),
+        action: () => selectPresetHandler?.('https://github.com'),
         available: true,
       },
       {
@@ -139,7 +149,7 @@ export function CommandPaletteModal({
         desc: 'Obfuscated multi-hop redirect gateway with cloaked destination',
         shortcut: null,
         icon: <ShareNetwork size={16} weight="bold" />,
-        action: () => onSelectPreset('https://bit.ly/3xSecurityDemo'),
+        action: () => selectPresetHandler?.('https://bit.ly/3xSecurityDemo'),
         available: true,
       },
       {
@@ -149,7 +159,7 @@ export function CommandPaletteModal({
         desc: 'Direct IP host routing bypassing canonical named DNS',
         shortcut: null,
         icon: <TerminalWindow size={16} weight="bold" />,
-        action: () => onSelectPreset('http://192.168.1.1/login'),
+        action: () => selectPresetHandler?.('http://192.168.1.1/login'),
         available: true,
       },
       {
@@ -159,7 +169,7 @@ export function CommandPaletteModal({
         desc: currentView === 'developer' ? 'Return to real-time URL heuristic checker' : 'Manage API keys, webhooks, and sandbox quotas',
         shortcut: null,
         icon: <Code size={16} weight="bold" />,
-        action: () => onNavigate(currentView === 'developer' ? 'inspector' : 'developer'),
+        action: () => navigateHandler?.(currentView === 'developer' ? 'inspector' : 'developer'),
         available: true,
       },
       {
@@ -186,17 +196,17 @@ export function CommandPaletteModal({
 
     return list.filter(c => c.available)
   }, [
-    hasResult,
+    isResultAvailable,
     onPasteAndInspect,
     onFocusInput,
     onCopyDefanged,
     onCopyIncidentBrief,
     onOpenSafePreview,
-    onOpenExport,
+    exportHandler,
     onOpenRiskDecomposition,
     onOpenHowItWorks,
-    onSelectPreset,
-    onNavigate,
+    selectPresetHandler,
+    navigateHandler,
     currentView,
     onCycleTheme,
   ])

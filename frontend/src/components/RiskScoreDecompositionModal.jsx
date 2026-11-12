@@ -13,14 +13,21 @@ import {
 } from '@phosphor-icons/react'
 import { decomposeRiskScore } from '../utils/riskDecomposer'
 
-export function RiskScoreDecompositionModal({ result, onClose, onOpenExplainer }) {
+export function RiskScoreDecompositionModal({
+  isOpen = true,
+  result,
+  onClose,
+  onOpenExplainer,
+}) {
   useEffect(() => {
+    if (!isOpen) return
+
     function handleKeyDown(e) {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [isOpen, onClose])
 
   const decomposition = useMemo(() => decomposeRiskScore(result), [result])
   const score = decomposition.compositeScore
@@ -28,6 +35,8 @@ export function RiskScoreDecompositionModal({ result, onClose, onOpenExplainer }
   const isMed = score >= 30 && score < 60
   const severityLabel = score >= 80 ? 'CRITICAL RISK' : isHigh ? 'HIGH RISK' : isMed ? 'MEDIUM RISK' : score > 0 ? 'LOW RISK' : 'CLEAN'
   const severityColor = isHigh ? 'var(--risk-danger-accent)' : isMed ? 'var(--risk-warn-accent)' : 'var(--risk-safe-accent)'
+
+  if (!isOpen) return null
 
   return (
     <div

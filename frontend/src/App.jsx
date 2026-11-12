@@ -1665,28 +1665,35 @@ export default function App() {
       <CommandPaletteModal
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
+        hasResult={Boolean(result)}
+        currentResult={result}
         onInspectUrl={checkUrl}
+        onSelectPreset={checkUrl}
         onPasteAndInspect={handlePasteAndInspect}
         onCopyDefanged={handleCopyDefanged}
         onCopyIncidentBrief={handleCopyIncidentBrief}
         onOpenExplainer={(topicId) => setExplainerTopic(topicId || 'ssl_recency')}
         onOpenSafePreview={() => setShowSafePreview(true)}
+        onOpenExport={setShowExportModal}
         onOpenExportReport={() => setShowExportModal(true)}
         onOpenRiskDecomposition={() => setShowRiskDecomposition(true)}
         onOpenHowItWorks={() => setShowInfo(true)}
+        onNavigate={setCurrentView}
         onSwitchView={setCurrentView}
+        currentView={currentView}
         onCycleTheme={cycleTheme}
-        currentResult={result}
       />
-      <RiskScoreDecompositionModal
-        isOpen={showRiskDecomposition}
-        onClose={() => setShowRiskDecomposition(false)}
-        result={result}
-        onOpenExplainer={(topicId) => {
-          setShowRiskDecomposition(false)
-          setExplainerTopic(topicId)
-        }}
-      />
+      {showRiskDecomposition && (
+        <RiskScoreDecompositionModal
+          isOpen={showRiskDecomposition}
+          onClose={() => setShowRiskDecomposition(false)}
+          result={result}
+          onOpenExplainer={(topicId) => {
+            setShowRiskDecomposition(false)
+            setExplainerTopic(topicId)
+          }}
+        />
+      )}
 
       {/* Full-Width Fixed Frosted Navigation Header */}
       <header className={`fixed-nav-header ${isScrolled ? 'is-scrolled' : ''}`}>
