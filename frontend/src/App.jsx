@@ -44,7 +44,6 @@ import { DeveloperPortal } from './views/DeveloperPortal'
 import { defangUrl } from './utils/stixGenerator'
 import PlainEnglishAdvisoryCard from './components/PlainEnglishAdvisoryCard'
 import SecurityExplainerDrawer from './components/SecurityExplainerDrawer'
-import { CommandPaletteModal } from './components/CommandPaletteModal'
 import { RiskScoreDecompositionModal } from './components/RiskScoreDecompositionModal'
 import { generateIncidentCard } from './utils/incidentCardFormatter'
 
@@ -1149,7 +1148,6 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
-  const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showRiskDecomposition, setShowRiskDecomposition] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
   const [showSafePreview, setShowSafePreview] = useState(false)
@@ -1258,10 +1256,6 @@ export default function App() {
       const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable
 
       if (e.key === 'Escape') {
-        if (showCommandPalette) {
-          setShowCommandPalette(false)
-          return
-        }
         if (showRiskDecomposition) {
           setShowRiskDecomposition(false)
           return
@@ -1285,13 +1279,6 @@ export default function App() {
         if (isInput) {
           e.target.blur()
         }
-        return
-      }
-
-      // Cmd+K or Ctrl+K toggles Command Palette
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setShowCommandPalette(prev => !prev)
         return
       }
 
@@ -1324,7 +1311,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
-    showCommandPalette,
     showRiskDecomposition,
     showSafePreview,
     showExportModal,
@@ -1662,27 +1648,6 @@ export default function App() {
         onSelectTopic={setExplainerTopic}
         result={result}
       />
-      <CommandPaletteModal
-        isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-        hasResult={Boolean(result)}
-        currentResult={result}
-        onInspectUrl={checkUrl}
-        onSelectPreset={checkUrl}
-        onPasteAndInspect={handlePasteAndInspect}
-        onCopyDefanged={handleCopyDefanged}
-        onCopyIncidentBrief={handleCopyIncidentBrief}
-        onOpenExplainer={(topicId) => setExplainerTopic(topicId || 'ssl_recency')}
-        onOpenSafePreview={() => setShowSafePreview(true)}
-        onOpenExport={setShowExportModal}
-        onOpenExportReport={() => setShowExportModal(true)}
-        onOpenRiskDecomposition={() => setShowRiskDecomposition(true)}
-        onOpenHowItWorks={() => setShowInfo(true)}
-        onNavigate={setCurrentView}
-        onSwitchView={setCurrentView}
-        currentView={currentView}
-        onCycleTheme={cycleTheme}
-      />
       {showRiskDecomposition && (
         <RiskScoreDecompositionModal
           isOpen={showRiskDecomposition}
@@ -1727,16 +1692,6 @@ export default function App() {
                 title="Developer API & Keys Management"
               >
                 <span>Developer API</span>
-              </button>
-
-              <button
-                type="button"
-                className="header-nav-link command-palette-trigger"
-                onClick={() => setShowCommandPalette(true)}
-                title="Open Command Palette (Cmd+K / Ctrl+K)"
-              >
-                <kbd className="palette-kbd-inline">⌘K</kbd>
-                <span>Commands</span>
               </button>
 
               <button
@@ -1811,14 +1766,6 @@ export default function App() {
               spellCheck={false}
             />
             <div className="input-trailing-actions">
-              <button
-                type="button"
-                className="input-shortcut-hint-btn"
-                onClick={() => setShowCommandPalette(true)}
-                title="Omnibar & Shortcuts (Cmd+K)"
-              >
-                <kbd className="palette-kbd-inline">⌘K</kbd>
-              </button>
               {url && !loading && (
                 <button
                   type="button"
