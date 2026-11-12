@@ -31,6 +31,7 @@ import {
   Database,
   DownloadSimple,
   TerminalWindow,
+  Calculator,
 } from '@phosphor-icons/react'
 
 import './App.css'
@@ -43,6 +44,9 @@ import { DeveloperPortal } from './views/DeveloperPortal'
 import { defangUrl } from './utils/stixGenerator'
 import PlainEnglishAdvisoryCard from './components/PlainEnglishAdvisoryCard'
 import SecurityExplainerDrawer from './components/SecurityExplainerDrawer'
+import { CommandPaletteModal } from './components/CommandPaletteModal'
+import { RiskScoreDecompositionModal } from './components/RiskScoreDecompositionModal'
+import { generateIncidentCard } from './utils/incidentCardFormatter'
 
 // ─── Stage Metadata for Multi-Stage Progress Scanner ─────────────────────────
 const STAGES = [
@@ -306,7 +310,15 @@ function InfoModal({ onClose }) {
 }
 
 // ─── Results Presentation Component ──────────────────────────────────────────
-function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenExportReport, onOpenExplainer }) {
+function ResultsView({
+  result,
+  streamState,
+  onReset,
+  onOpenSafePreview,
+  onOpenExportReport,
+  onOpenExplainer,
+  onOpenRiskDecomposition,
+}) {
   const [copiedKey, setCopiedKey] = useState(null)
   const { url, verdict, message, threats, structureAnalysis } = result
   const sa = structureAnalysis || {}
@@ -423,10 +435,15 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               <Pulse size={13} weight="bold" />
               {hopCount} {hopCount === 1 ? 'Hop' : 'Hops'}
             </span>
-            <span className="quick-stat-item">
-              <Code size={13} weight="bold" />
-              Risk: {sandbox.riskScore ?? 0}/100
-            </span>
+            <button
+              type="button"
+              className="quick-stat-item quick-stat-btn"
+              onClick={onOpenRiskDecomposition}
+              title="Click to view mathematical risk score decomposition"
+            >
+              <Calculator size={13} weight="bold" />
+              <span>Risk: {sandbox.riskScore ?? 0}/100 [Breakdown]</span>
+            </button>
             {infra.asnInfo && (
               <span className={`quick-stat-item ${infra.asnInfo.isHighAbuse ? 'val-danger' : ''}`}>
                 <Database size={13} weight="bold" />
@@ -450,6 +467,21 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
               title="Copy defanged link (safe for Slack/Teams)"
             >
               {copiedKey === 'defang' ? <><Check size={12} weight="bold" /> Copied Defanged</> : <><Copy size={12} weight="bold" /> Defang URL</>}
+            </button>
+            <button
+              type="button"
+              className={`copy-mini-btn ${copiedKey === 'incident-brief' ? 'copied' : ''}`}
+              onClick={() => {
+                const cardText = generateIncidentCard(result)
+                handleCopy(cardText, 'incident-brief')
+              }}
+              title="Copy professional zero-emoji incident brief for Slack, Teams, or Jira"
+            >
+              {copiedKey === 'incident-brief' ? (
+                <><Check size={12} weight="bold" /> Copied Brief</>
+              ) : (
+                <><ShareNetwork size={12} weight="bold" /> Copy Incident Brief</>
+              )}
             </button>
             <button
               type="button"
@@ -885,12 +917,38 @@ function ResultsView({ result, streamState, onReset, onOpenSafePreview, onOpenEx
           {sandbox.available ? (
             <div>
               <div className="sandbox-hero-cluster">
-                <RiskGauge score={sandbox.riskScore ?? 0} />
+                <div
+                  className="risk-gauge-interactive-wrapper"
+                  onClick={onOpenRiskDecomposition}
+                  role="button"
+                  tabIndex={0}
+                  title="Click to view mathematical point attribution breakdown"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onOpenRiskDecomposition?.()
+                    }
+                  }}
+                >
+                  <RiskGauge score={sandbox.riskScore ?? 0} />
+                  <span className="gauge-inspect-badge">
+                    <Calculator size={11} weight="bold" />
+                    <span>Decompose Score</span>
+                  </span>
+                </div>
                 <div className="sandbox-hero-explain">
                   <strong>Static Heuristic Risk Metric</strong>
                   <p>
                     Passively evaluated across HTML markup, metadata tags, and form actions. Higher values signal aggressive credential-harvesting indicators or obfuscated evasion scripts.
                   </p>
+                  <button
+                    type="button"
+                    className="risk-breakdown-btn"
+                    onClick={onOpenRiskDecomposition}
+                  >
+                    <Calculator size={13} weight="bold" />
+                    <span>View Mathematical Point Breakdown</span>
+                  </button>
                 </div>
               </div>
 
@@ -1091,6 +1149,8 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [showRiskDecomposition, setShowRiskDecomposition] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
   const [showSafePreview, setShowSafePreview] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -1172,26 +1232,106 @@ export default function App() {
     return () => mql.removeEventListener('change', handleSystemThemeChange)
   }, [themePreference])
 
-  // Keyboard shortcuts
+  function cycleTheme() {
+    setThemePreference(prev => {
+      if (prev === 'system') return 'dark'
+      if (prev === 'dark') return 'light'
+      return 'system'
+    })
+  }
+
+  function handleCopyDefanged() {
+    if (!result?.url) return
+    const defanged = defangUrl(result.url)
+    navigator.clipboard.writeText(defanged)
+  }
+
+  function handleCopyIncidentBrief() {
+    if (!result) return
+    const cardText = generateIncidentCard(result)
+    navigator.clipboard.writeText(cardText)
+  }
+
+  // Keyboard navigation & global shortcuts
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-        if (e.key === 'Escape') {
+      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable
+
+      if (e.key === 'Escape') {
+        if (showCommandPalette) {
+          setShowCommandPalette(false)
+          return
+        }
+        if (showRiskDecomposition) {
+          setShowRiskDecomposition(false)
+          return
+        }
+        if (showSafePreview) {
+          setShowSafePreview(false)
+          return
+        }
+        if (showExportModal) {
+          setShowExportModal(false)
+          return
+        }
+        if (showInfo) {
+          setShowInfo(false)
+          return
+        }
+        if (explainerTopic) {
+          setExplainerTopic(null)
+          return
+        }
+        if (isInput) {
           e.target.blur()
         }
         return
       }
-      if (e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+
+      // Cmd+K or Ctrl+K toggles Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(prev => !prev)
+        return
+      }
+
+      // Ignore single-key shortcuts while typing in inputs
+      if (isInput) return
+
+      if (e.key === '/') {
         e.preventDefault()
         inputRef.current?.focus()
       } else if (e.key === '?') {
         e.preventDefault()
         setShowInfo(true)
+      } else if (e.key.toLowerCase() === 'p' && result) {
+        e.preventDefault()
+        setShowSafePreview(true)
+      } else if (e.key.toLowerCase() === 'e' && result) {
+        e.preventDefault()
+        setShowExportModal(true)
+      } else if (e.key.toLowerCase() === 'r' && result) {
+        e.preventDefault()
+        setShowRiskDecomposition(true)
+      } else if (e.key.toLowerCase() === 'd' && result) {
+        e.preventDefault()
+        handleCopyDefanged()
+      } else if (e.key.toLowerCase() === 'b' && result) {
+        e.preventDefault()
+        handleCopyIncidentBrief()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [
+    showCommandPalette,
+    showRiskDecomposition,
+    showSafePreview,
+    showExportModal,
+    showInfo,
+    explainerTopic,
+    result,
+  ])
 
   function handleReset() {
     if (streamAbortControllerRef.current) {
@@ -1201,6 +1341,9 @@ export default function App() {
     setUrl('')
     setError('')
     setLoading(false)
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, '', window.location.pathname)
+    }
     setStreamState({
       isStreaming: false,
       verifiedCount: 0,
@@ -1220,17 +1363,27 @@ export default function App() {
     inputRef.current?.focus()
   }
 
-  async function handleSubmit(e) {
-    if (e) e.preventDefault()
-    setError('')
-    setResult(null)
-    setCurrentStage('')
-
-    const trimmed = url.trim()
+  async function checkUrl(targetUrl) {
+    const trimmed = (targetUrl || '').trim()
     if (!trimmed) {
       setError('Please provide a valid web URL or shortened link to inspect.')
       inputRef.current?.focus()
       return
+    }
+
+    setUrl(trimmed)
+    setError('')
+    setResult(null)
+    setCurrentStage('')
+
+    // Synchronize browser URL query parameter for deep-linking
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      if (searchParams.get('url') !== trimmed) {
+        searchParams.set('url', trimmed)
+        const newRelativePath = `${window.location.pathname}?${searchParams.toString()}`
+        window.history.replaceState({ url: trimmed }, '', newRelativePath)
+      }
     }
 
     if (streamAbortControllerRef.current) {
@@ -1440,30 +1593,13 @@ export default function App() {
     }
   }
 
+  function handleSubmit(e) {
+    if (e) e.preventDefault()
+    checkUrl(url)
+  }
+
   function handleSelectPreset(presetUrl) {
-    if (streamAbortControllerRef.current) {
-      streamAbortControllerRef.current.abort()
-    }
-    setUrl(presetUrl)
-    setError('')
-    setResult(null)
-    setStreamState({
-      isStreaming: false,
-      verifiedCount: 0,
-      totalEngines: 6,
-      monotonicVerdict: 'INSPECTING...',
-      criticalEscalation: null,
-      subsystems: {
-        threat_intel: { status: 'PENDING', data: null, badge: null, latencyMs: null },
-        infrastructure: { status: 'PENDING', data: null, badge: null, latencyMs: null },
-        domain_age: { status: 'PENDING', data: null, badge: null, latencyMs: null },
-        redirect_chain: { status: 'PENDING', data: null, badge: null, latencyMs: null },
-        sandbox_preview: { status: 'PENDING', data: null, badge: null, latencyMs: null },
-        dynamic_sandbox: { status: 'PENDING', data: null, badge: null, latencyMs: null },
-      },
-      lastAuditedSubsystem: null,
-    })
-    inputRef.current?.focus()
+    checkUrl(presetUrl)
   }
 
   async function handlePaste() {
@@ -1479,6 +1615,40 @@ export default function App() {
     }
   }
 
+  async function handlePasteAndInspect() {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text && text.trim()) {
+        checkUrl(text.trim())
+      }
+    } catch (_err) {
+      inputRef.current?.focus()
+    }
+  }
+
+  // Deep-linking: auto-inspect if ?url= or ?scan= is present in window.location.search
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const initialUrl = params.get('url') || params.get('scan')
+    if (initialUrl && initialUrl.trim()) {
+      checkUrl(initialUrl.trim())
+    }
+
+    function handlePopState() {
+      const currentParams = new URLSearchParams(window.location.search)
+      const qUrl = currentParams.get('url') || currentParams.get('scan')
+      if (qUrl && qUrl.trim()) {
+        checkUrl(qUrl.trim())
+      } else {
+        handleReset()
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
   return (
     <div className="page">
       {/* Modals */}
@@ -1491,6 +1661,31 @@ export default function App() {
         activeTopicId={explainerTopic}
         onSelectTopic={setExplainerTopic}
         result={result}
+      />
+      <CommandPaletteModal
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onInspectUrl={checkUrl}
+        onPasteAndInspect={handlePasteAndInspect}
+        onCopyDefanged={handleCopyDefanged}
+        onCopyIncidentBrief={handleCopyIncidentBrief}
+        onOpenExplainer={(topicId) => setExplainerTopic(topicId || 'ssl_recency')}
+        onOpenSafePreview={() => setShowSafePreview(true)}
+        onOpenExportReport={() => setShowExportModal(true)}
+        onOpenRiskDecomposition={() => setShowRiskDecomposition(true)}
+        onOpenHowItWorks={() => setShowInfo(true)}
+        onSwitchView={setCurrentView}
+        onCycleTheme={cycleTheme}
+        currentResult={result}
+      />
+      <RiskScoreDecompositionModal
+        isOpen={showRiskDecomposition}
+        onClose={() => setShowRiskDecomposition(false)}
+        result={result}
+        onOpenExplainer={(topicId) => {
+          setShowRiskDecomposition(false)
+          setExplainerTopic(topicId)
+        }}
       />
 
       {/* Full-Width Fixed Frosted Navigation Header */}
@@ -1525,6 +1720,16 @@ export default function App() {
                 title="Developer API & Keys Management"
               >
                 <span>Developer API</span>
+              </button>
+
+              <button
+                type="button"
+                className="header-nav-link command-palette-trigger"
+                onClick={() => setShowCommandPalette(true)}
+                title="Open Command Palette (Cmd+K / Ctrl+K)"
+              >
+                <kbd className="palette-kbd-inline">⌘K</kbd>
+                <span>Commands</span>
               </button>
 
               <button
@@ -1599,6 +1804,14 @@ export default function App() {
               spellCheck={false}
             />
             <div className="input-trailing-actions">
+              <button
+                type="button"
+                className="input-shortcut-hint-btn"
+                onClick={() => setShowCommandPalette(true)}
+                title="Omnibar & Shortcuts (Cmd+K)"
+              >
+                <kbd className="palette-kbd-inline">⌘K</kbd>
+              </button>
               {url && !loading && (
                 <button
                   type="button"
@@ -1689,6 +1902,7 @@ export default function App() {
             onOpenSafePreview={() => setShowSafePreview(true)}
             onOpenExportReport={() => setShowExportModal(true)}
             onOpenExplainer={(topicId) => setExplainerTopic(topicId || 'ssl_recency')}
+            onOpenRiskDecomposition={() => setShowRiskDecomposition(true)}
           />
         )}
 
